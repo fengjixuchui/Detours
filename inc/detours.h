@@ -11,7 +11,7 @@
 #ifndef _DETOURS_H_
 #define _DETOURS_H_
 
-#define DETOURS_VERSION     0x4c0c1   // 0xMAJORcMINORcPATCH
+#include "detver.h"
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -48,15 +48,15 @@
 #endif
 
 #ifdef _WIN64
-#undef DETOURS_32BIT
-#define DETOURS_64BIT 1
-#define DETOURS_BITS 64
+#undef  DETOURS_32BIT
+#define DETOURS_64BIT   1
+#define DETOURS_BITS    64
 // If all 64bit kernels can run one and only one 32bit architecture.
 //#define DETOURS_OPTION_BITS 32
 #else
-#define DETOURS_32BIT 1
-#undef DETOURS_64BIT
-#define DETOURS_BITS 32
+#define DETOURS_32BIT   1
+#undef  DETOURS_64BIT
+#define DETOURS_BITS    32
 // If all 64bit kernels can run one and only one 32bit architecture.
 //#define DETOURS_OPTION_BITS 32
 #endif
@@ -67,8 +67,8 @@
 //
 
 #if (_MSC_VER < 1299)
-typedef LONG LONG_PTR;
-typedef ULONG ULONG_PTR;
+typedef LONG    LONG_PTR;
+typedef ULONG   ULONG_PTR;
 #endif
 
 ///////////////////////////////////////////////// SAL 2.0 Annotations w/o SAL.
@@ -307,13 +307,15 @@ extern "C" {
 //
 #define DETOUR_INSTRUCTION_TARGET_NONE          ((PVOID)0)
 #define DETOUR_INSTRUCTION_TARGET_DYNAMIC       ((PVOID)(LONG_PTR)-1)
-#define DETOUR_SECTION_HEADER_SIGNATURE         0x00727444   // "Dtr\0"
+#define DETOUR_SECTION_HEADER_SIGNATURE         0x00727444  // "Dtr\0"
 
 extern const GUID DETOUR_EXE_RESTORE_GUID;
 extern const GUID DETOUR_EXE_HELPER_GUID;
 
 #define DETOUR_TRAMPOLINE_SIGNATURE             0x21727444  // Dtr!
 typedef struct _DETOUR_TRAMPOLINE DETOUR_TRAMPOLINE, *PDETOUR_TRAMPOLINE;
+
+#define DETOURS_TAG '!rtD' // Dtr!
 
 /////////////////////////////////////////////////////////// Binary Structures.
 //
@@ -434,22 +436,22 @@ typedef struct _DETOUR_EXE_HELPER
 /////////////////////////////////////////////////////////////// Helper Macros.
 //
 #define DETOURS_STRINGIFY(x)    DETOURS_STRINGIFY_(x)
-#define DETOURS_STRINGIFY_(x)    #x
+#define DETOURS_STRINGIFY_(x)   #x
 
 ///////////////////////////////////////////////////////////// Binary Typedefs.
 //
-typedef BOOL (CALLBACK *PF_DETOUR_BINARY_BYWAY_CALLBACK)(
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_BINARY_BYWAY_CALLBACK)(
     _In_opt_ PVOID pContext,
     _In_opt_ LPCSTR pszFile,
     _Outptr_result_maybenull_ LPCSTR *ppszOutFile);
 
-typedef BOOL (CALLBACK *PF_DETOUR_BINARY_FILE_CALLBACK)(
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_BINARY_FILE_CALLBACK)(
     _In_opt_ PVOID pContext,
     _In_ LPCSTR pszOrigFile,
     _In_ LPCSTR pszFile,
     _Outptr_result_maybenull_ LPCSTR *ppszOutFile);
 
-typedef BOOL (CALLBACK *PF_DETOUR_BINARY_SYMBOL_CALLBACK)(
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_BINARY_SYMBOL_CALLBACK)(
     _In_opt_ PVOID pContext,
     _In_ ULONG nOrigOrdinal,
     _In_ ULONG nOrdinal,
@@ -458,25 +460,25 @@ typedef BOOL (CALLBACK *PF_DETOUR_BINARY_SYMBOL_CALLBACK)(
     _In_opt_ LPCSTR pszSymbol,
     _Outptr_result_maybenull_ LPCSTR *ppszOutSymbol);
 
-typedef BOOL (CALLBACK *PF_DETOUR_BINARY_COMMIT_CALLBACK)(
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_BINARY_COMMIT_CALLBACK)(
     _In_opt_ PVOID pContext);
 
-typedef BOOL (CALLBACK *PF_DETOUR_ENUMERATE_EXPORT_CALLBACK)(_In_opt_ PVOID pContext,
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_ENUMERATE_EXPORT_CALLBACK)(_In_opt_ PVOID pContext,
                                                              _In_ ULONG nOrdinal,
                                                              _In_opt_ LPCSTR pszName,
                                                              _In_opt_ PVOID pCode);
 
-typedef BOOL (CALLBACK *PF_DETOUR_IMPORT_FILE_CALLBACK)(_In_opt_ PVOID pContext,
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_IMPORT_FILE_CALLBACK)(_In_opt_ PVOID pContext,
                                                         _In_opt_ HMODULE hModule,
                                                         _In_opt_ LPCSTR pszFile);
 
-typedef BOOL (CALLBACK *PF_DETOUR_IMPORT_FUNC_CALLBACK)(_In_opt_ PVOID pContext,
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_IMPORT_FUNC_CALLBACK)(_In_opt_ PVOID pContext,
                                                         _In_ DWORD nOrdinal,
                                                         _In_opt_ LPCSTR pszFunc,
                                                         _In_opt_ PVOID pvFunc);
 
 // Same as PF_DETOUR_IMPORT_FUNC_CALLBACK but extra indirection on last parameter.
-typedef BOOL (CALLBACK *PF_DETOUR_IMPORT_FUNC_CALLBACK_EX)(_In_opt_ PVOID pContext,
+typedef BOOL (DETOURS_CALLBACK *PF_DETOUR_IMPORT_FUNC_CALLBACK_EX)(_In_opt_ PVOID pContext,
                                                            _In_ DWORD nOrdinal,
                                                            _In_opt_ LPCSTR pszFunc,
                                                            _In_opt_ PVOID* ppvFunc);
@@ -486,117 +488,126 @@ typedef VOID * PDETOUR_LOADED_BINARY;
 
 //////////////////////////////////////////////////////////// Transaction APIs.
 //
-LONG WINAPI DetourTransactionBegin(VOID);
-LONG WINAPI DetourTransactionAbort(VOID);
-LONG WINAPI DetourTransactionCommit(VOID);
-LONG WINAPI DetourTransactionCommitEx(_Out_opt_ PVOID **pppFailedPointer);
+LONG DETOURS_API DetourTransactionBegin(VOID);
+LONG DETOURS_API DetourTransactionAbort(VOID);
+LONG DETOURS_API DetourTransactionCommit(VOID);
+LONG DETOURS_API DetourTransactionCommitEx(_Out_opt_ PVOID **pppFailedPointer);
 
-LONG WINAPI DetourUpdateThread(_In_ HANDLE hThread);
+LONG DETOURS_API DetourUpdateThread(_In_ HANDLE hThread);
 
-LONG WINAPI DetourAttach(_Inout_ PVOID *ppPointer,
+LONG DETOURS_API DetourAttach(_Inout_ PVOID *ppPointer,
                          _In_ PVOID pDetour);
 
-LONG WINAPI DetourAttachEx(_Inout_ PVOID *ppPointer,
+LONG DETOURS_API DetourAttachEx(_Inout_ PVOID *ppPointer,
                            _In_ PVOID pDetour,
                            _Out_opt_ PDETOUR_TRAMPOLINE *ppRealTrampoline,
                            _Out_opt_ PVOID *ppRealTarget,
                            _Out_opt_ PVOID *ppRealDetour);
 
-LONG WINAPI DetourDetach(_Inout_ PVOID *ppPointer,
+LONG DETOURS_API DetourDetach(_Inout_ PVOID *ppPointer,
                          _In_ PVOID pDetour);
 
-BOOL WINAPI DetourSetIgnoreTooSmall(_In_ BOOL fIgnore);
-BOOL WINAPI DetourSetRetainRegions(_In_ BOOL fRetain);
-PVOID WINAPI DetourSetSystemRegionLowerBound(_In_ PVOID pSystemRegionLowerBound);
-PVOID WINAPI DetourSetSystemRegionUpperBound(_In_ PVOID pSystemRegionUpperBound);
+BOOL DETOURS_API DetourSetIgnoreTooSmall(_In_ BOOL fIgnore);
+BOOL DETOURS_API DetourSetRetainRegions(_In_ BOOL fRetain);
+PVOID DETOURS_API DetourSetSystemRegionLowerBound(_In_ PVOID pSystemRegionLowerBound);
+PVOID DETOURS_API DetourSetSystemRegionUpperBound(_In_ PVOID pSystemRegionUpperBound);
 
 ////////////////////////////////////////////////////////////// Code Functions.
 //
-PVOID WINAPI DetourFindFunction(_In_ LPCSTR pszModule,
+PVOID DETOURS_API DetourFindFunction(_In_ LPCSTR pszModule,
                                 _In_ LPCSTR pszFunction);
-PVOID WINAPI DetourCodeFromPointer(_In_ PVOID pPointer,
+PVOID DETOURS_API DetourCodeFromPointer(_In_ PVOID pPointer,
                                    _Out_opt_ PVOID *ppGlobals);
-PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
+PVOID DETOURS_API DetourCopyInstruction(_In_opt_ PVOID pDst,
                                    _Inout_opt_ PVOID *ppDstPool,
                                    _In_ PVOID pSrc,
                                    _Out_opt_ PVOID *ppTarget,
                                    _Out_opt_ LONG *plExtra);
-BOOL WINAPI DetourSetCodeModule(_In_ HMODULE hModule,
+BOOL DETOURS_API DetourSetCodeModule(_In_ HMODULE hModule,
                                 _In_ BOOL fLimitReferencesToModule);
 
 ///////////////////////////////////////////////////// Loaded Binary Functions.
 //
-HMODULE WINAPI DetourGetContainingModule(_In_ PVOID pvAddr);
-HMODULE WINAPI DetourEnumerateModules(_In_opt_ HMODULE hModuleLast);
-PVOID WINAPI DetourGetEntryPoint(_In_opt_ HMODULE hModule);
-ULONG WINAPI DetourGetModuleSize(_In_opt_ HMODULE hModule);
-BOOL WINAPI DetourEnumerateExports(_In_ HMODULE hModule,
+#ifdef DetoursUserMode
+
+HMODULE DETOURS_API DetourGetContainingModule(_In_ PVOID pvAddr);
+HMODULE DETOURS_API DetourEnumerateModules(_In_opt_ HMODULE hModuleLast);
+PVOID DETOURS_API DetourGetEntryPoint(_In_opt_ HMODULE hModule);
+ULONG DETOURS_API DetourGetModuleSize(_In_opt_ HMODULE hModule);
+BOOL DETOURS_API DetourEnumerateExports(_In_ HMODULE hModule,
                                    _In_opt_ PVOID pContext,
                                    _In_ PF_DETOUR_ENUMERATE_EXPORT_CALLBACK pfExport);
-BOOL WINAPI DetourEnumerateImports(_In_opt_ HMODULE hModule,
+BOOL DETOURS_API DetourEnumerateImports(_In_opt_ HMODULE hModule,
                                    _In_opt_ PVOID pContext,
                                    _In_opt_ PF_DETOUR_IMPORT_FILE_CALLBACK pfImportFile,
                                    _In_opt_ PF_DETOUR_IMPORT_FUNC_CALLBACK pfImportFunc);
 
-BOOL WINAPI DetourEnumerateImportsEx(_In_opt_ HMODULE hModule,
+BOOL DETOURS_API DetourEnumerateImportsEx(_In_opt_ HMODULE hModule,
                                      _In_opt_ PVOID pContext,
                                      _In_opt_ PF_DETOUR_IMPORT_FILE_CALLBACK pfImportFile,
                                      _In_opt_ PF_DETOUR_IMPORT_FUNC_CALLBACK_EX pfImportFuncEx);
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourFindPayload(_In_opt_ HMODULE hModule,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourFindPayload(_In_opt_ HMODULE hModule,
                                _In_ REFGUID rguid,
                                _Out_ DWORD *pcbData);
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourFindPayloadEx(_In_ REFGUID rguid,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourFindPayloadEx(_In_ REFGUID rguid,
                                  _Out_ DWORD * pcbData);
 
-DWORD WINAPI DetourGetSizeOfPayloads(_In_opt_ HMODULE hModule);
+DWORD DETOURS_API DetourGetSizeOfPayloads(_In_opt_ HMODULE hModule);
+
+#endif // DetoursUserMode
 
 ///////////////////////////////////////////////// Persistent Binary Functions.
 //
+#ifdef DetoursUserMode
 
-PDETOUR_BINARY WINAPI DetourBinaryOpen(_In_ HANDLE hFile);
+PDETOUR_BINARY DETOURS_API DetourBinaryOpen(_In_ HANDLE hFile);
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourBinaryEnumeratePayloads(_In_ PDETOUR_BINARY pBinary,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourBinaryEnumeratePayloads(_In_ PDETOUR_BINARY pBinary,
                                            _Out_opt_ GUID *pGuid,
                                            _Out_ DWORD *pcbData,
                                            _Inout_ DWORD *pnIterator);
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourBinaryFindPayload(_In_ PDETOUR_BINARY pBinary,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourBinaryFindPayload(_In_ PDETOUR_BINARY pBinary,
                                      _In_ REFGUID rguid,
                                      _Out_ DWORD *pcbData);
 
-PVOID WINAPI DetourBinarySetPayload(_In_ PDETOUR_BINARY pBinary,
+PVOID DETOURS_API DetourBinarySetPayload(_In_ PDETOUR_BINARY pBinary,
                                     _In_ REFGUID rguid,
                                     _In_reads_opt_(cbData) PVOID pData,
                                     _In_ DWORD cbData);
-BOOL WINAPI DetourBinaryDeletePayload(_In_ PDETOUR_BINARY pBinary, _In_ REFGUID rguid);
-BOOL WINAPI DetourBinaryPurgePayloads(_In_ PDETOUR_BINARY pBinary);
-BOOL WINAPI DetourBinaryResetImports(_In_ PDETOUR_BINARY pBinary);
-BOOL WINAPI DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
+BOOL DETOURS_API DetourBinaryDeletePayload(_In_ PDETOUR_BINARY pBinary, _In_ REFGUID rguid);
+BOOL DETOURS_API DetourBinaryPurgePayloads(_In_ PDETOUR_BINARY pBinary);
+BOOL DETOURS_API DetourBinaryResetImports(_In_ PDETOUR_BINARY pBinary);
+BOOL DETOURS_API DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
                                     _In_opt_ PVOID pContext,
                                     _In_opt_ PF_DETOUR_BINARY_BYWAY_CALLBACK pfByway,
                                     _In_opt_ PF_DETOUR_BINARY_FILE_CALLBACK pfFile,
                                     _In_opt_ PF_DETOUR_BINARY_SYMBOL_CALLBACK pfSymbol,
                                     _In_opt_ PF_DETOUR_BINARY_COMMIT_CALLBACK pfCommit);
-BOOL WINAPI DetourBinaryWrite(_In_ PDETOUR_BINARY pBinary, _In_ HANDLE hFile);
-BOOL WINAPI DetourBinaryClose(_In_ PDETOUR_BINARY pBinary);
+BOOL DETOURS_API DetourBinaryWrite(_In_ PDETOUR_BINARY pBinary, _In_ HANDLE hFile);
+BOOL DETOURS_API DetourBinaryClose(_In_ PDETOUR_BINARY pBinary);
+
+#endif // DetoursUserMode
 
 /////////////////////////////////////////////////// Create Process & Load Dll.
 //
-typedef BOOL (WINAPI *PDETOUR_CREATE_PROCESS_ROUTINEA)(
+#ifdef DetoursUserMode
+
+typedef BOOL (DETOURS_API *PDETOUR_CREATE_PROCESS_ROUTINEA)(
     _In_opt_ LPCSTR lpApplicationName,
     _Inout_opt_ LPSTR lpCommandLine,
     _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
@@ -608,7 +619,7 @@ typedef BOOL (WINAPI *PDETOUR_CREATE_PROCESS_ROUTINEA)(
     _In_ LPSTARTUPINFOA lpStartupInfo,
     _Out_ LPPROCESS_INFORMATION lpProcessInformation);
 
-typedef BOOL (WINAPI *PDETOUR_CREATE_PROCESS_ROUTINEW)(
+typedef BOOL (DETOURS_API *PDETOUR_CREATE_PROCESS_ROUTINEW)(
     _In_opt_ LPCWSTR lpApplicationName,
     _Inout_opt_ LPWSTR lpCommandLine,
     _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
@@ -620,7 +631,7 @@ typedef BOOL (WINAPI *PDETOUR_CREATE_PROCESS_ROUTINEW)(
     _In_ LPSTARTUPINFOW lpStartupInfo,
     _Out_ LPPROCESS_INFORMATION lpProcessInformation);
 
-BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
                                         _Inout_opt_ LPSTR lpCommandLine,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -633,7 +644,7 @@ BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
                                         _In_ LPCSTR lpDllName,
                                         _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA);
 
-BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
                                         _Inout_opt_ LPWSTR lpCommandLine,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -654,7 +665,7 @@ BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
 #define PDETOUR_CREATE_PROCESS_ROUTINE  PDETOUR_CREATE_PROCESS_ROUTINEA
 #endif // !UNICODE
 
-BOOL WINAPI DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
                                           _Inout_opt_ LPSTR lpCommandLine,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -667,7 +678,7 @@ BOOL WINAPI DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
                                           _In_ LPCSTR lpDllName,
                                           _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA);
 
-BOOL WINAPI DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
                                           _Inout_opt_  LPWSTR lpCommandLine,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -686,7 +697,7 @@ BOOL WINAPI DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
 #define DetourCreateProcessWithDllEx    DetourCreateProcessWithDllExA
 #endif // !UNICODE
 
-BOOL WINAPI DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
                                          _Inout_opt_ LPSTR lpCommandLine,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -700,7 +711,7 @@ BOOL WINAPI DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
                                          _In_reads_(nDlls) LPCSTR *rlpDlls,
                                          _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA);
 
-BOOL WINAPI DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
                                          _Inout_opt_ LPWSTR lpCommandLine,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -720,11 +731,11 @@ BOOL WINAPI DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
 #define DetourCreateProcessWithDlls     DetourCreateProcessWithDllsA
 #endif // !UNICODE
 
-BOOL WINAPI DetourProcessViaHelperA(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperA(_In_ DWORD dwTargetPid,
                                     _In_ LPCSTR lpDllName,
                                     _In_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA);
 
-BOOL WINAPI DetourProcessViaHelperW(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperW(_In_ DWORD dwTargetPid,
                                     _In_ LPCSTR lpDllName,
                                     _In_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW);
 
@@ -734,12 +745,12 @@ BOOL WINAPI DetourProcessViaHelperW(_In_ DWORD dwTargetPid,
 #define DetourProcessViaHelper          DetourProcessViaHelperA
 #endif // !UNICODE
 
-BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
                                         _In_ DWORD nDlls,
                                         _In_reads_(nDlls) LPCSTR *rlpDlls,
                                         _In_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA);
 
-BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
                                         _In_ DWORD nDlls,
                                         _In_reads_(nDlls) LPCSTR *rlpDlls,
                                         _In_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW);
@@ -750,31 +761,35 @@ BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
 #define DetourProcessViaHelperDlls      DetourProcessViaHelperDllsA
 #endif // !UNICODE
 
-BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
                                        _In_reads_(nDlls) LPCSTR *rlpDlls,
                                        _In_ DWORD nDlls);
 
-BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
                                          _In_ HMODULE hImage,
                                          _In_ BOOL bIs32Bit,
                                          _In_reads_(nDlls) LPCSTR *rlpDlls,
                                          _In_ DWORD nDlls);
 
-BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
                                        _In_ REFGUID rguid,
                                        _In_reads_bytes_(cbData) PVOID pvData,
                                        _In_ DWORD cbData);
-BOOL WINAPI DetourRestoreAfterWith(VOID);
-BOOL WINAPI DetourRestoreAfterWithEx(_In_reads_bytes_(cbData) PVOID pvData,
+BOOL DETOURS_API DetourRestoreAfterWith(VOID);
+BOOL DETOURS_API DetourRestoreAfterWithEx(_In_reads_bytes_(cbData) PVOID pvData,
                                      _In_ DWORD cbData);
-BOOL WINAPI DetourIsHelperProcess(VOID);
-VOID CALLBACK DetourFinishHelperProcess(_In_ HWND,
+BOOL DETOURS_API DetourIsHelperProcess(VOID);
+VOID DETOURS_CALLBACK DetourFinishHelperProcess(_In_ HWND,
                                         _In_ HINSTANCE,
                                         _In_ LPSTR,
                                         _In_ INT);
 
+#endif // DetoursUserMode
+
 //
 //////////////////////////////////////////////////////////////////////////////
+
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -804,28 +819,31 @@ LONG InterlockedCompareExchange(_Inout_ LONG *ptr, _In_ LONG nval, _In_ LONG ova
 #else
 #pragma warning(push)
 #pragma warning(disable:4091) // empty typedef
-#include <dbghelp.h>
+#if __has_include(<dbghelp.h>)
+#   define _IMAGEHLP_SOURCE_
+#   include <dbghelp.h>
+#endif
 #pragma warning(pop)
 #endif
 
 #ifdef IMAGEAPI // defined by DBGHELP.H
-typedef LPAPI_VERSION (NTAPI *PF_ImagehlpApiVersionEx)(_In_ LPAPI_VERSION AppVersion);
+typedef LPAPI_VERSION (IMAGEAPI  *PF_ImagehlpApiVersionEx)(_In_ LPAPI_VERSION AppVersion);
 
-typedef BOOL (NTAPI *PF_SymInitialize)(_In_ HANDLE hProcess,
+typedef BOOL (IMAGEAPI  *PF_SymInitialize)(_In_ HANDLE hProcess,
                                        _In_opt_ LPCSTR UserSearchPath,
                                        _In_ BOOL fInvadeProcess);
-typedef DWORD (NTAPI *PF_SymSetOptions)(_In_ DWORD SymOptions);
-typedef DWORD (NTAPI *PF_SymGetOptions)(VOID);
-typedef DWORD64 (NTAPI *PF_SymLoadModule64)(_In_ HANDLE hProcess,
+typedef DWORD (IMAGEAPI  *PF_SymSetOptions)(_In_ DWORD SymOptions);
+typedef DWORD (IMAGEAPI  *PF_SymGetOptions)(VOID);
+typedef DWORD64 (IMAGEAPI  *PF_SymLoadModule64)(_In_ HANDLE hProcess,
                                             _In_opt_ HANDLE hFile,
                                             _In_ LPSTR ImageName,
                                             _In_opt_ LPSTR ModuleName,
                                             _In_ DWORD64 BaseOfDll,
                                             _In_opt_ DWORD SizeOfDll);
-typedef BOOL (NTAPI *PF_SymGetModuleInfo64)(_In_ HANDLE hProcess,
+typedef BOOL (IMAGEAPI  *PF_SymGetModuleInfo64)(_In_ HANDLE hProcess,
                                             _In_ DWORD64 qwAddr,
                                             _Out_ PIMAGEHLP_MODULE64 ModuleInfo);
-typedef BOOL (NTAPI *PF_SymFromName)(_In_ HANDLE hProcess,
+typedef BOOL (IMAGEAPI  *PF_SymFromName)(_In_ HANDLE hProcess,
                                      _In_ LPSTR Name,
                                      _Out_ PSYMBOL_INFO Symbol);
 
@@ -852,15 +870,19 @@ PDETOUR_SYM_INFO DetourLoadImageHlp(VOID);
 #define _CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS 1
 
 #ifndef DETOUR_TRACE
-#if DETOUR_DEBUG
-#define DETOUR_TRACE(x) printf x
-#define DETOUR_BREAK()  __debugbreak()
-#include <stdio.h>
-#include <limits.h>
-#else
-#define DETOUR_TRACE(x)
-#define DETOUR_BREAK()
-#endif
+#   if DETOUR_DEBUG
+#       ifdef DetoursUserMode
+#           define DETOUR_TRACE(x) printf x
+#       else
+#           define DETOUR_TRACE(x) DbgPrint x
+#       endif
+#       define DETOUR_BREAK()  __debugbreak()
+#       include <stdio.h>
+#       include <limits.h>
+#   else
+#       define DETOUR_TRACE(x)
+#       define DETOUR_BREAK()
+#   endif
 #endif
 
 #if 1 || defined(DETOURS_IA64)
@@ -871,10 +893,10 @@ PDETOUR_SYM_INFO DetourLoadImageHlp(VOID);
 
 #define DETOUR_IA64_INSTRUCTIONS_PER_BUNDLE (3)
 
-#define DETOUR_IA64_TEMPLATE_OFFSET (0)
-#define DETOUR_IA64_TEMPLATE_SIZE   (5)
+#define DETOUR_IA64_TEMPLATE_OFFSET         (0)
+#define DETOUR_IA64_TEMPLATE_SIZE           (5)
 
-#define DETOUR_IA64_INSTRUCTION_SIZE (41)
+#define DETOUR_IA64_INSTRUCTION_SIZE        (41)
 #define DETOUR_IA64_INSTRUCTION0_OFFSET (DETOUR_IA64_TEMPLATE_SIZE)
 #define DETOUR_IA64_INSTRUCTION1_OFFSET (DETOUR_IA64_TEMPLATE_SIZE + DETOUR_IA64_INSTRUCTION_SIZE)
 #define DETOUR_IA64_INSTRUCTION2_OFFSET (DETOUR_IA64_TEMPLATE_SIZE + DETOUR_IA64_INSTRUCTION_SIZE + DETOUR_IA64_INSTRUCTION_SIZE)
@@ -1005,7 +1027,7 @@ __declspec(align(16)) struct DETOUR_IA64_BUNDLE
 
     VOID    SetStop();
 
-    UINT    Copy(_Out_ DETOUR_IA64_BUNDLE *pDst, _Inout_opt_ DETOUR_IA64_BUNDLE* pBundleExtra = NULL) const;
+    UINT    Copy(_Out_ DETOUR_IA64_BUNDLE *pDst, _Inout_opt_ DETOUR_IA64_BUNDLE* pBundleExtra = nullptr) const;
 };
 #endif // DETOURS_IA64
 
@@ -1023,13 +1045,13 @@ extern "C" {
 #endif // __cplusplus
 
 #define DETOUR_OFFLINE_LIBRARY(x)                                       \
-PVOID WINAPI DetourCopyInstruction##x(_In_opt_ PVOID pDst,              \
+PVOID DETOURS_API DetourCopyInstruction##x(_In_opt_ PVOID pDst,              \
                                       _Inout_opt_ PVOID *ppDstPool,     \
                                       _In_ PVOID pSrc,                  \
                                       _Out_opt_ PVOID *ppTarget,        \
                                       _Out_opt_ LONG *plExtra);         \
                                                                         \
-BOOL WINAPI DetourSetCodeModule##x(_In_ HMODULE hModule,                \
+BOOL DETOURS_API DetourSetCodeModule##x(_In_ HMODULE hModule,                \
                                    _In_ BOOL fLimitReferencesToModule); \
 
 DETOUR_OFFLINE_LIBRARY(X86)
@@ -1046,14 +1068,14 @@ DETOUR_OFFLINE_LIBRARY(IA64)
 //
 
 _Success_(return != FALSE)
-BOOL WINAPI DetourVirtualProtectSameExecuteEx(_In_  HANDLE hProcess,
+BOOL DETOURS_API DetourVirtualProtectSameExecuteEx(_In_  HANDLE hProcess,
                                               _In_  PVOID pAddress,
                                               _In_  SIZE_T nSize,
                                               _In_  DWORD dwNewProtect,
                                               _Out_ PDWORD pdwOldProtect);
 
 _Success_(return != FALSE)
-BOOL WINAPI DetourVirtualProtectSameExecute(_In_  PVOID pAddress,
+BOOL DETOURS_API DetourVirtualProtectSameExecute(_In_  PVOID pAddress,
                                             _In_  SIZE_T nSize,
                                             _In_  DWORD dwNewProtect,
                                             _Out_ PDWORD pdwOldProtect);

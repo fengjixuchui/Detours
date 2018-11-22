@@ -7,38 +7,17 @@
 //  Copyright (c) Microsoft Corporation.  All rights reserved.
 //
 
-#if _MSC_VER >= 1900
-#pragma warning(push)
-#pragma warning(disable:4091) // empty typedef
-#endif
-#define _CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS 1
-#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
-#include <windows.h>
-#include <stddef.h>
-#pragma warning(push)
-#if _MSC_VER > 1400
-#pragma warning(disable:6102 6103) // /analyze warnings
-#endif
-#include <strsafe.h>
-#pragma warning(pop)
+#include "internal.h"
 
-// #define DETOUR_DEBUG 1
-#define DETOURS_INTERNAL
 
-#include "detours.h"
+#ifdef DetoursUserMode
 
-#if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
-#error detours.h version mismatch
-#endif
-
-#if _MSC_VER >= 1900
-#pragma warning(pop)
-#endif
-
-#define IMPORT_DIRECTORY OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT]
-#define BOUND_DIRECTORY OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT]
-#define CLR_DIRECTORY OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR]
-#define IAT_DIRECTORY OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT]
+//////////////////////////////////////////////////////////////////////////
+//
+#define IMPORT_DIRECTORY    OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT]
+#define BOUND_DIRECTORY     OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT]
+#define CLR_DIRECTORY       OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR]
+#define IAT_DIRECTORY       OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IAT]
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -50,19 +29,19 @@ const GUID DETOUR_EXE_HELPER_GUID = { /* ea0251b9-5cde-41b5-98d0-2af4a26b0fee */
 //
 // Enumate through modules in the target process.
 //
-static BOOL WINAPI LoadNtHeaderFromProcess(HANDLE hProcess,
+static BOOL DETOURS_API LoadNtHeaderFromProcess(HANDLE hProcess,
                                            HMODULE hModule,
                                            PIMAGE_NT_HEADERS32 pNtHeader)
 {
     PBYTE pbModule = (PBYTE)hModule;
 
-    if (pbModule == NULL) {
-        SetLastError(ERROR_INVALID_PARAMETER);
+    if (pbModule == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INVALID_PARAMETER);
         return FALSE;
     }
 
     MEMORY_BASIC_INFORMATION mbi;
-    ZeroMemory(&mbi, sizeof(mbi));
+    RtlSecureZeroMemory(&mbi, sizeof(mbi));
 
     if (VirtualQueryEx(hProcess, hModule, &mbi, sizeof(mbi)) == 0) {
         return FALSE;
@@ -70,9 +49,9 @@ static BOOL WINAPI LoadNtHeaderFromProcess(HANDLE hProcess,
 
     IMAGE_DOS_HEADER idh;
 
-    if (!ReadProcessMemory(hProcess, pbModule, &idh, sizeof(idh), NULL)) {
+    if (!ReadProcessMemory(hProcess, pbModule, &idh, sizeof(idh), nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(idh@%p..%p) failed: %d\n",
-                      pbModule, pbModule + sizeof(idh), GetLastError()));
+                      pbModule, pbModule + sizeof(idh), DetoursGetLastError()));
         return FALSE;
     }
 
@@ -80,36 +59,36 @@ static BOOL WINAPI LoadNtHeaderFromProcess(HANDLE hProcess,
         (DWORD)idh.e_lfanew > mbi.RegionSize ||
         (DWORD)idh.e_lfanew < sizeof(idh)) {
 
-        SetLastError(ERROR_BAD_EXE_FORMAT);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
 
     if (!ReadProcessMemory(hProcess, pbModule + idh.e_lfanew,
-                           pNtHeader, sizeof(*pNtHeader), NULL)) {
+                           pNtHeader, sizeof(*pNtHeader), nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(inh@%p..%p:%p) failed: %d\n",
                       pbModule + idh.e_lfanew,
                       pbModule + idh.e_lfanew + sizeof(*pNtHeader),
                       pbModule,
-                      GetLastError()));
+                      DetoursGetLastError()));
         return FALSE;
     }
 
     if (pNtHeader->Signature != IMAGE_NT_SIGNATURE) {
-        SetLastError(ERROR_BAD_EXE_FORMAT);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
 
     return TRUE;
 }
 
-static HMODULE WINAPI EnumerateModulesInProcess(HANDLE hProcess,
+static HMODULE DETOURS_API EnumerateModulesInProcess(HANDLE hProcess,
                                                 HMODULE hModuleLast,
                                                 PIMAGE_NT_HEADERS32 pNtHeader)
 {
     PBYTE pbLast = (PBYTE)hModuleLast + MM_ALLOCATION_GRANULARITY;
 
     MEMORY_BASIC_INFORMATION mbi;
-    ZeroMemory(&mbi, sizeof(mbi));
+    RtlSecureZeroMemory(&mbi, sizeof(mbi));
 
     // Find the next memory region that contains a mapped PE image.
     //
@@ -141,7 +120,7 @@ static HMODULE WINAPI EnumerateModulesInProcess(HANDLE hProcess,
             return (HMODULE)pbLast;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -151,18 +130,18 @@ static HMODULE WINAPI EnumerateModulesInProcess(HANDLE hProcess,
 static PBYTE FindAndAllocateNearBase(HANDLE hProcess, PBYTE pbModule, PBYTE pbBase, DWORD cbAlloc)
 {
     MEMORY_BASIC_INFORMATION mbi;
-    ZeroMemory(&mbi, sizeof(mbi));
+    RtlSecureZeroMemory(&mbi, sizeof(mbi));
 
     PBYTE pbLast = pbBase;
     for (;; pbLast = (PBYTE)mbi.BaseAddress + mbi.RegionSize) {
 
-        ZeroMemory(&mbi, sizeof(mbi));
+        RtlSecureZeroMemory(&mbi, sizeof(mbi));
         if (VirtualQueryEx(hProcess, (PVOID)pbLast, &mbi, sizeof(mbi)) == 0) {
-            if (GetLastError() == ERROR_INVALID_PARAMETER) {
+            if (DetoursGetLastError() == DETOURS_STATUS_INVALID_PARAMETER) {
                 break;
             }
             DETOUR_TRACE(("VirtualQueryEx(%p) failed: %d\n",
-                          pbLast, GetLastError()));
+                          pbLast, DetoursGetLastError()));
             break;
         }
         // Usermode address space has such an unaligned region size always at the
@@ -192,7 +171,7 @@ static PBYTE FindAndAllocateNearBase(HANDLE hProcess, PBYTE pbModule, PBYTE pbBa
         const size_t GB4 = ((((size_t)1) << 32) - 1);
         if ((size_t)(pbAddress + cbAlloc - 1 - pbModule) > GB4) {
             DETOUR_TRACE(("FindAndAllocateNearBase(1) failing due to distance >4GB %p\n", pbAddress));
-            return NULL;
+            return nullptr;
         }
 #else
         UNREFERENCED_PARAMETER(pbModule);
@@ -205,15 +184,15 @@ static PBYTE FindAndAllocateNearBase(HANDLE hProcess, PBYTE pbModule, PBYTE pbBa
         for (; pbAddress < (PBYTE)mbi.BaseAddress + mbi.RegionSize; pbAddress += MM_ALLOCATION_GRANULARITY) {
             PBYTE pbAlloc = (PBYTE)VirtualAllocEx(hProcess, pbAddress, cbAlloc,
                                                   MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (pbAlloc == NULL) {
-                DETOUR_TRACE(("VirtualAllocEx(%p) failed: %d\n", pbAddress, GetLastError()));
+            if (pbAlloc == nullptr) {
+                DETOUR_TRACE(("VirtualAllocEx(%p) failed: %d\n", pbAddress, DetoursGetLastError()));
                 continue;
             }
 #ifdef _WIN64
             // The offset from pbModule to any replacement import must fit into 32 bits.
             if ((size_t)(pbAddress + cbAlloc - 1 - pbModule) > GB4) {
                 DETOUR_TRACE(("FindAndAllocateNearBase(2) failing due to distance >4GB %p\n", pbAddress));
-                return NULL;
+                return nullptr;
             }
 #endif
             DETOUR_TRACE(("[%p..%p] Allocated for import table.\n",
@@ -221,7 +200,7 @@ static PBYTE FindAndAllocateNearBase(HANDLE hProcess, PBYTE pbModule, PBYTE pbBa
             return pbAlloc;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 static inline DWORD PadToDword(DWORD dw)
@@ -238,11 +217,11 @@ static inline HRESULT ReplaceOptionalSizeA(_Inout_z_count_(cchDest) LPSTR pszDes
                                            _In_ size_t cchDest,
                                            _In_z_ LPCSTR pszSize)
 {
-    if (cchDest == 0 || pszDest == NULL || pszSize == NULL ||
+    if (cchDest == 0 || pszDest == nullptr || pszSize == nullptr ||
         pszSize[0] == '\0' || pszSize[1] == '\0' || pszSize[2] != '\0') {
 
         // can not write into empty buffer or with string other than two chars.
-        return ERROR_INVALID_PARAMETER;
+        return DETOURS_STATUS_INVALID_PARAMETER;
     }
 
     for (; cchDest >= 2; cchDest--, pszDest++) {
@@ -259,14 +238,14 @@ static inline HRESULT ReplaceOptionalSizeA(_Inout_z_count_(cchDest) LPSTR pszDes
 static BOOL RecordExeRestore(HANDLE hProcess, HMODULE hModule, DETOUR_EXE_RESTORE& der)
 {
     // Save the various headers for DetourRestoreAfterWith.
-    ZeroMemory(&der, sizeof(der));
+    RtlSecureZeroMemory(&der, sizeof(der));
     der.cb = sizeof(der);
 
     der.pidh = (PBYTE)hModule;
     der.cbidh = sizeof(der.idh);
-    if (!ReadProcessMemory(hProcess, der.pidh, &der.idh, sizeof(der.idh), NULL)) {
+    if (!ReadProcessMemory(hProcess, der.pidh, &der.idh, sizeof(der.idh), nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(idh@%p..%p) failed: %d\n",
-                      der.pidh, der.pidh + der.cbidh, GetLastError()));
+                      der.pidh, der.pidh + der.cbidh, DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("IDH: %p..%p\n", der.pidh, der.pidh + der.cbidh));
@@ -275,9 +254,9 @@ static BOOL RecordExeRestore(HANDLE hProcess, HMODULE hModule, DETOUR_EXE_RESTOR
     // First we read just the Signature and FileHeader.
     der.pinh = der.pidh + der.idh.e_lfanew;
     der.cbinh = FIELD_OFFSET(IMAGE_NT_HEADERS, OptionalHeader);
-    if (!ReadProcessMemory(hProcess, der.pinh, &der.inh, der.cbinh, NULL)) {
+    if (!ReadProcessMemory(hProcess, der.pinh, &der.inh, der.cbinh, nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(inh@%p..%p) failed: %d\n",
-                      der.pinh, der.pinh + der.cbinh, GetLastError()));
+                      der.pinh, der.pinh + der.cbinh, DetoursGetLastError()));
         return FALSE;
     }
 
@@ -290,9 +269,9 @@ static BOOL RecordExeRestore(HANDLE hProcess, HMODULE hModule, DETOUR_EXE_RESTOR
         return FALSE;
     }
 
-    if (!ReadProcessMemory(hProcess, der.pinh, &der.inh, der.cbinh, NULL)) {
+    if (!ReadProcessMemory(hProcess, der.pinh, &der.inh, der.cbinh, nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(inh@%p..%p) failed: %d\n",
-                      der.pinh, der.pinh + der.cbinh, GetLastError()));
+                      der.pinh, der.pinh + der.cbinh, DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("INH: %p..%p\n", der.pinh, der.pinh + der.cbinh));
@@ -322,11 +301,11 @@ static BOOL RecordExeRestore(HANDLE hProcess, HMODULE hModule, DETOUR_EXE_RESTOR
         }
     }
 
-    if (der.pclr != 0) {
+    if (der.pclr != nullptr) {
         der.cbclr = sizeof(der.clr);
-        if (!ReadProcessMemory(hProcess, der.pclr, &der.clr, der.cbclr, NULL)) {
+        if (!ReadProcessMemory(hProcess, der.pclr, &der.clr, der.cbclr, nullptr)) {
             DETOUR_TRACE(("ReadProcessMemory(clr@%p..%p) failed: %d\n",
-                          der.pclr, der.pclr + der.cbclr, GetLastError()));
+                          der.pclr, der.pclr + der.cbclr, DetoursGetLastError()));
             return FALSE;
         }
         DETOUR_TRACE(("CLR: %p..%p\n", der.pclr, der.pclr + der.cbclr));
@@ -385,25 +364,25 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
     PBYTE pbModule = (PBYTE)hModule;
     DWORD n;
 
-    ZeroMemory(&inh32, sizeof(inh32));
-    ZeroMemory(&inh64, sizeof(inh64));
-    ZeroMemory(sects, sizeof(sects));
+    RtlSecureZeroMemory(&inh32, sizeof(inh32));
+    RtlSecureZeroMemory(&inh64, sizeof(inh64));
+    RtlSecureZeroMemory(sects, sizeof(sects));
 
     DETOUR_TRACE(("UpdateFrom32To64(%04x)\n", machine));
     //////////////////////////////////////////////////////// Read old headers.
     //
-    if (!ReadProcessMemory(hProcess, pbModule, &idh, sizeof(idh), NULL)) {
+    if (!ReadProcessMemory(hProcess, pbModule, &idh, sizeof(idh), nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(idh@%p..%p) failed: %d\n",
-                      pbModule, pbModule + sizeof(idh), GetLastError()));
+                      pbModule, pbModule + sizeof(idh), DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("ReadProcessMemory(idh@%p..%p)\n",
                   pbModule, pbModule + sizeof(idh)));
 
     PBYTE pnh = pbModule + idh.e_lfanew;
-    if (!ReadProcessMemory(hProcess, pnh, &inh32, sizeof(inh32), NULL)) {
+    if (!ReadProcessMemory(hProcess, pnh, &inh32, sizeof(inh32), nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(inh@%p..%p) failed: %d\n",
-                      pnh, pnh + sizeof(inh32), GetLastError()));
+                      pnh, pnh + sizeof(inh32), DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("ReadProcessMemory(inh@%p..%p)\n", pnh, pnh + sizeof(inh32)));
@@ -416,9 +395,9 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
         FIELD_OFFSET(IMAGE_NT_HEADERS, OptionalHeader) +
         inh32.FileHeader.SizeOfOptionalHeader;
     ULONG cb = inh32.FileHeader.NumberOfSections * sizeof(IMAGE_SECTION_HEADER);
-    if (!ReadProcessMemory(hProcess, psects, &sects, cb, NULL)) {
+    if (!ReadProcessMemory(hProcess, psects, &sects, cb, nullptr)) {
         DETOUR_TRACE(("ReadProcessMemory(ish@%p..%p) failed: %d\n",
-                      psects, psects + cb, GetLastError()));
+                      psects, psects + cb, DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("ReadProcessMemory(ish@%p..%p)\n", psects, psects + cb));
@@ -473,9 +452,9 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
         return FALSE;
     }
 
-    if (!WriteProcessMemory(hProcess, pnh, &inh64, sizeof(inh64), NULL)) {
+    if (!WriteProcessMemory(hProcess, pnh, &inh64, sizeof(inh64), nullptr)) {
         DETOUR_TRACE(("WriteProcessMemory(inh@%p..%p) failed: %d\n",
-                      pnh, pnh + sizeof(inh64), GetLastError()));
+                      pnh, pnh + sizeof(inh64), DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("WriteProcessMemory(inh@%p..%p)\n", pnh, pnh + sizeof(inh64)));
@@ -484,9 +463,9 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
         FIELD_OFFSET(IMAGE_NT_HEADERS, OptionalHeader) +
         inh64.FileHeader.SizeOfOptionalHeader;
     cb = inh64.FileHeader.NumberOfSections * sizeof(IMAGE_SECTION_HEADER);
-    if (!WriteProcessMemory(hProcess, psects, &sects, cb, NULL)) {
+    if (!WriteProcessMemory(hProcess, psects, &sects, cb, nullptr)) {
         DETOUR_TRACE(("WriteProcessMemory(ish@%p..%p) failed: %d\n",
-                      psects, psects + cb, GetLastError()));
+                      psects, psects + cb, DetoursGetLastError()));
         return FALSE;
     }
     DETOUR_TRACE(("WriteProcessMemory(ish@%p..%p)\n", psects, psects + cb));
@@ -497,13 +476,13 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
     }
 
     // Remove the import table.
-    if (der.pclr != NULL && (der.clr.Flags & 1)) {
+    if (der.pclr != nullptr && (der.clr.Flags & 1)) {
         inh64.IMPORT_DIRECTORY.VirtualAddress = 0;
         inh64.IMPORT_DIRECTORY.Size = 0;
 
-        if (!WriteProcessMemory(hProcess, pnh, &inh64, sizeof(inh64), NULL)) {
+        if (!WriteProcessMemory(hProcess, pnh, &inh64, sizeof(inh64), nullptr)) {
             DETOUR_TRACE(("WriteProcessMemory(inh@%p..%p) failed: %d\n",
-                          pnh, pnh + sizeof(inh64), GetLastError()));
+                          pnh, pnh + sizeof(inh64), DetoursGetLastError()));
             return FALSE;
         }
     }
@@ -520,7 +499,7 @@ static BOOL UpdateFrom32To64(HANDLE hProcess, HMODULE hModule, WORD machine,
 
 //////////////////////////////////////////////////////////////////////////////
 //
-BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
                                        _In_reads_(nDlls) LPCSTR *rlpDlls,
                                        _In_ DWORD nDlls)
 {
@@ -529,15 +508,15 @@ BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
     BOOL bHas64BitDll = FALSE;
     BOOL bHas32BitExe = FALSE;
     BOOL bIs32BitProcess;
-    HMODULE hModule = NULL;
-    HMODULE hLast = NULL;
+    HMODULE hModule = nullptr;
+    HMODULE hLast = nullptr;
 
     DETOUR_TRACE(("DetourUpdateProcessWithDll(%p,dlls=%d)\n", hProcess, nDlls));
 
     for (;;) {
         IMAGE_NT_HEADERS32 inh;
 
-        if ((hLast = EnumerateModulesInProcess(hProcess, hLast, &inh)) == NULL) {
+        if ((hLast = EnumerateModulesInProcess(hProcess, hLast, &inh)) == nullptr) {
             break;
         }
 
@@ -562,8 +541,8 @@ BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
         }
     }
 
-    if (hModule == NULL) {
-        SetLastError(ERROR_INVALID_OPERATION);
+    if (hModule == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INVALID_OPERATION);
         return FALSE;
     }
 
@@ -579,7 +558,7 @@ BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
         }
     }
 
-    DETOUR_TRACE(("    32BitExe=%d 32BitProcess\n", bHas32BitExe, bIs32BitProcess));
+    DETOUR_TRACE(("    32BitExe=%d 32BitProcess=%d\n", bHas32BitExe, bIs32BitProcess));
 
     return DetourUpdateProcessWithDllEx(hProcess,
                                         hModule,
@@ -588,7 +567,7 @@ BOOL WINAPI DetourUpdateProcessWithDll(_In_ HANDLE hProcess,
                                         nDlls);
 }
 
-BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
                                          _In_ HMODULE hModule,
                                          _In_ BOOL bIs32BitProcess,
                                          _In_reads_(nDlls) LPCSTR *rlpDlls,
@@ -602,8 +581,8 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
 
     IMAGE_NT_HEADERS32 inh;
 
-    if (hModule == NULL || LoadNtHeaderFromProcess(hProcess, hModule, &inh) == NULL) {
-        SetLastError(ERROR_INVALID_OPERATION);
+    if (hModule == nullptr || LoadNtHeaderFromProcess(hProcess, hModule, &inh) == FALSE) {
+        DetoursSetLastError(DETOURS_STATUS_INVALID_OPERATION);
         return FALSE;
     }
 
@@ -613,10 +592,10 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
         bIs32BitExe = TRUE;
     }
 
-    DETOUR_TRACE(("    32BitExe=%d 32BitProcess\n", bIs32BitExe, bIs32BitProcess));
+    DETOUR_TRACE(("    32BitExe=%d 32BitProcess=%d\n", bIs32BitExe, bIs32BitProcess));
 
-    if (hModule == NULL) {
-        SetLastError(ERROR_INVALID_OPERATION);
+    if (hModule == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INVALID_OPERATION);
         return FALSE;
     }
 
@@ -635,7 +614,7 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
             || (der.clr.Flags & 1) == 0     // Or mixed-mode MSIL
             || (der.clr.Flags & 2) != 0) {  // Or 32BIT Required MSIL
 
-            SetLastError(ERROR_INVALID_HANDLE);
+            DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
             return FALSE;
         }
 
@@ -672,13 +651,13 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
         // Note: This happens for 32-bit PE binaries containing only
         // manage code that have been marked as 64-bit ready.
         //
-        SetLastError(ERROR_INVALID_HANDLE);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
         return FALSE;
     }
 #elif defined(DETOURS_64BIT)
     if (bIs32BitProcess || bIs32BitExe) {
         // Can't detour a 32-bit process with 64-bit code.
-        SetLastError(ERROR_INVALID_HANDLE);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
         return FALSE;
     }
     else {
@@ -693,24 +672,24 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
 
     /////////////////////////////////////////////////// Update the CLR header.
     //
-    if (der.pclr != NULL) {
+    if (der.pclr != nullptr) {
         DETOUR_CLR_HEADER clr;
-        CopyMemory(&clr, &der.clr, sizeof(clr));
+        memcpy(&clr, &der.clr, sizeof(clr));
         clr.Flags &= 0xfffffffe;    // Clear the IL_ONLY flag.
 
         DWORD dwProtect;
         if (!DetourVirtualProtectSameExecuteEx(hProcess, der.pclr, sizeof(clr), PAGE_READWRITE, &dwProtect)) {
-            DETOUR_TRACE(("VirtualProtectEx(clr) write failed: %d\n", GetLastError()));
+            DETOUR_TRACE(("VirtualProtectEx(clr) write failed: %d\n", DetoursGetLastError()));
             return FALSE;
         }
 
-        if (!WriteProcessMemory(hProcess, der.pclr, &clr, sizeof(clr), NULL)) {
-            DETOUR_TRACE(("WriteProcessMemory(clr) failed: %d\n", GetLastError()));
+        if (!WriteProcessMemory(hProcess, der.pclr, &clr, sizeof(clr), nullptr)) {
+            DETOUR_TRACE(("WriteProcessMemory(clr) failed: %d\n", DetoursGetLastError()));
             return FALSE;
         }
 
         if (!VirtualProtectEx(hProcess, der.pclr, sizeof(clr), dwProtect, &dwProtect)) {
-            DETOUR_TRACE(("VirtualProtectEx(clr) restore failed: %d\n", GetLastError()));
+            DETOUR_TRACE(("VirtualProtectEx(clr) restore failed: %d\n", DetoursGetLastError()));
             return FALSE;
         }
         DETOUR_TRACE(("CLR: %p..%p\n", der.pclr, der.pclr + der.cbclr));
@@ -719,8 +698,8 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
         if (der.clr.Flags & 0x2) { // Is the 32BIT Required Flag set?
             // X64 never gets here because the process appears as a WOW64 process.
             // However, on IA64, it doesn't appear to be a WOW process.
-            DETOUR_TRACE(("CLR Requires 32-bit\n", der.pclr, der.pclr + der.cbclr));
-            SetLastError(ERROR_INVALID_HANDLE);
+            DETOUR_TRACE(("CLR Requires 32-bit\n"));
+            DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
             return FALSE;
         }
 #endif // DETOURS_64BIT
@@ -729,7 +708,7 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
     //////////////////////////////// Save the undo data to the target process.
     //
     if (!DetourCopyPayloadToProcess(hProcess, DETOUR_EXE_RESTORE_GUID, &der, sizeof(der))) {
-        DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", GetLastError()));
+        DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", DetoursGetLastError()));
         return FALSE;
     }
     return TRUE;
@@ -737,7 +716,7 @@ BOOL WINAPI DetourUpdateProcessWithDllEx(_In_ HANDLE hProcess,
 
 //////////////////////////////////////////////////////////////////////////////
 //
-BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
                                         _Inout_opt_ LPSTR lpCommandLine,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -754,7 +733,7 @@ BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
     PROCESS_INFORMATION pi;
     BOOL fResult = FALSE;
 
-    if (pfCreateProcessA == NULL) {
+    if (pfCreateProcessA == nullptr) {
         pfCreateProcessA = CreateProcessA;
     }
 
@@ -769,8 +748,8 @@ BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
                                lpStartupInfo,
                                &pi);
 
-    if (lpProcessInformation != NULL) {
-        CopyMemory(lpProcessInformation, &pi, sizeof(pi));
+    if (lpProcessInformation != nullptr) {
+        memcpy(lpProcessInformation, &pi, sizeof(pi));
     }
 
     if (!fResult) {
@@ -779,7 +758,7 @@ BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
 
     LPCSTR rlpDlls[2];
     DWORD nDlls = 0;
-    if (lpDllName != NULL) {
+    if (lpDllName != nullptr) {
         rlpDlls[nDlls++] = lpDllName;
     }
 
@@ -795,7 +774,7 @@ BOOL WINAPI DetourCreateProcessWithDllA(_In_opt_ LPCSTR lpApplicationName,
 }
 
 
-BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
                                         _Inout_opt_ LPWSTR lpCommandLine,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                         _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -811,7 +790,7 @@ BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
     DWORD dwMyCreationFlags = (dwCreationFlags | CREATE_SUSPENDED);
     PROCESS_INFORMATION pi;
 
-    if (pfCreateProcessW == NULL) {
+    if (pfCreateProcessW == nullptr) {
         pfCreateProcessW = CreateProcessW;
     }
 
@@ -827,7 +806,7 @@ BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
                                     &pi);
 
     if (lpProcessInformation) {
-        CopyMemory(lpProcessInformation, &pi, sizeof(pi));
+        memcpy(lpProcessInformation, &pi, sizeof(pi));
     }
 
     if (!fResult) {
@@ -836,7 +815,7 @@ BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
 
     LPCSTR rlpDlls[2];
     DWORD nDlls = 0;
-    if (lpDllName != NULL) {
+    if (lpDllName != nullptr) {
         rlpDlls[nDlls++] = lpDllName;
     }
 
@@ -851,7 +830,7 @@ BOOL WINAPI DetourCreateProcessWithDllW(_In_opt_ LPCWSTR lpApplicationName,
     return TRUE;
 }
 
-BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
+BOOL DETOURS_API DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
                                        _In_ REFGUID rguid,
                                        _In_reads_bytes_(cbData) PVOID pvData,
                                        _In_ DWORD cbData)
@@ -863,10 +842,10 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
                      sizeof(DETOUR_SECTION_RECORD) +
                      cbData);
 
-    PBYTE pbBase = (PBYTE)VirtualAllocEx(hProcess, NULL, cbTotal,
+    PBYTE pbBase = (PBYTE)VirtualAllocEx(hProcess, nullptr, cbTotal,
                                          MEM_COMMIT, PAGE_READWRITE);
-    if (pbBase == NULL) {
-        DETOUR_TRACE(("VirtualAllocEx(%d) failed: %d\n", cbTotal, GetLastError()));
+    if (pbBase == nullptr) {
+        DETOUR_TRACE(("VirtualAllocEx(%d) failed: %d\n", cbTotal, DetoursGetLastError()));
         return FALSE;
     }
 
@@ -878,17 +857,17 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
     DETOUR_SECTION_RECORD dsr;
     SIZE_T cbWrote = 0;
 
-    ZeroMemory(&idh, sizeof(idh));
+    RtlSecureZeroMemory(&idh, sizeof(idh));
     idh.e_magic = IMAGE_DOS_SIGNATURE;
     idh.e_lfanew = sizeof(idh);
     if (!WriteProcessMemory(hProcess, pbTarget, &idh, sizeof(idh), &cbWrote) ||
         cbWrote != sizeof(idh)) {
-        DETOUR_TRACE(("WriteProcessMemory(idh) failed: %d\n", GetLastError()));
+        DETOUR_TRACE(("WriteProcessMemory(idh) failed: %d\n", DetoursGetLastError()));
         return FALSE;
     }
     pbTarget += sizeof(idh);
 
-    ZeroMemory(&inh, sizeof(inh));
+    RtlSecureZeroMemory(&inh, sizeof(inh));
     inh.Signature = IMAGE_NT_SIGNATURE;
     inh.FileHeader.SizeOfOptionalHeader = sizeof(inh.OptionalHeader);
     inh.FileHeader.Characteristics = IMAGE_FILE_DLL;
@@ -900,7 +879,7 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
     }
     pbTarget += sizeof(inh);
 
-    ZeroMemory(&ish, sizeof(ish));
+    RtlSecureZeroMemory(&ish, sizeof(ish));
     memcpy(ish.Name, ".detour", sizeof(ish.Name));
     ish.VirtualAddress = (DWORD)((pbTarget + sizeof(ish)) - pbBase);
     ish.SizeOfRawData = (sizeof(DETOUR_SECTION_HEADER) +
@@ -912,7 +891,7 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
     }
     pbTarget += sizeof(ish);
 
-    ZeroMemory(&dsh, sizeof(dsh));
+    RtlSecureZeroMemory(&dsh, sizeof(dsh));
     dsh.cbHeaderSize = sizeof(dsh);
     dsh.nSignature = DETOUR_SECTION_HEADER_SIGNATURE;
     dsh.nDataOffset = sizeof(DETOUR_SECTION_HEADER);
@@ -925,7 +904,7 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
     }
     pbTarget += sizeof(dsh);
 
-    ZeroMemory(&dsr, sizeof(dsr));
+    RtlSecureZeroMemory(&dsr, sizeof(dsr));
     dsr.cbBytes = cbData + sizeof(DETOUR_SECTION_RECORD);
     dsr.nReserved = 0;
     dsr.guid = rguid;
@@ -947,29 +926,29 @@ BOOL WINAPI DetourCopyPayloadToProcess(_In_ HANDLE hProcess,
 }
 
 static BOOL s_fSearchedForHelper = FALSE;
-static PDETOUR_EXE_HELPER s_pHelper = NULL;
+static PDETOUR_EXE_HELPER s_pHelper = nullptr;
 
-VOID CALLBACK DetourFinishHelperProcess(_In_ HWND,
+VOID DETOURS_CALLBACK DetourFinishHelperProcess(_In_ HWND,
                                         _In_ HINSTANCE,
                                         _In_ LPSTR,
                                         _In_ INT)
 {
-    LPCSTR * rlpDlls = NULL;
+    LPCSTR * rlpDlls = nullptr;
     DWORD Result = 9900;
     DWORD cOffset = 0;
     DWORD cSize = 0;
-    HANDLE hProcess = NULL;
+    HANDLE hProcess = nullptr;
 
-    if (s_pHelper == NULL) {
-        DETOUR_TRACE(("DetourFinishHelperProcess called with s_pHelper = NULL.\n"));
+    if (s_pHelper == nullptr) {
+        DETOUR_TRACE(("DetourFinishHelperProcess called with s_pHelper = nullptr.\n"));
         Result = 9905;
         goto Cleanup;
     }
 
     hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, s_pHelper->pid);
-    if (hProcess == NULL) {
+    if (hProcess == nullptr) {
         DETOUR_TRACE(("OpenProcess(pid=%d) failed: %d\n",
-                      s_pHelper->pid, GetLastError()));
+                      s_pHelper->pid, DetoursGetLastError()));
         Result = 9901;
         goto Cleanup;
     }
@@ -990,40 +969,40 @@ VOID CALLBACK DetourFinishHelperProcess(_In_ HWND,
 
     if (!DetourUpdateProcessWithDll(hProcess, rlpDlls, s_pHelper->nDlls)) {
         DETOUR_TRACE(("DetourUpdateProcessWithDll(pid=%d) failed: %d\n",
-                      s_pHelper->pid, GetLastError()));
+                      s_pHelper->pid, DetoursGetLastError()));
         Result = 9903;
         goto Cleanup;
     }
     Result = 0;
 
   Cleanup:
-    if (rlpDlls != NULL) {
+    if (rlpDlls != nullptr) {
         delete[] rlpDlls;
-        rlpDlls = NULL;
+        rlpDlls = nullptr;
     }
 
     ExitProcess(Result);
 }
 
-BOOL WINAPI DetourIsHelperProcess(VOID)
+BOOL DETOURS_API DetourIsHelperProcess(VOID)
 {
     PVOID pvData;
     DWORD cbData;
 
     if (s_fSearchedForHelper) {
-        return (s_pHelper != NULL);
+        return (s_pHelper != nullptr);
     }
 
     s_fSearchedForHelper = TRUE;
     pvData = DetourFindPayloadEx(DETOUR_EXE_HELPER_GUID, &cbData);
 
-    if (pvData == NULL || cbData < sizeof(DETOUR_EXE_HELPER)) {
+    if (pvData == nullptr || cbData < sizeof(DETOUR_EXE_HELPER)) {
         return FALSE;
     }
 
     s_pHelper = (PDETOUR_EXE_HELPER)pvData;
     if (s_pHelper->cb < sizeof(*s_pHelper)) {
-        s_pHelper = NULL;
+        s_pHelper = nullptr;
         return FALSE;
     }
 
@@ -1031,23 +1010,23 @@ BOOL WINAPI DetourIsHelperProcess(VOID)
 }
 
 static
-BOOL WINAPI AllocExeHelper(_Out_ PDETOUR_EXE_HELPER *pHelper,
+BOOL DETOURS_API AllocExeHelper(_Out_ PDETOUR_EXE_HELPER *pHelper,
                            _In_ DWORD dwTargetPid,
                            _In_ DWORD nDlls,
                            _In_reads_(nDlls) LPCSTR *rlpDlls)
 {
-    PDETOUR_EXE_HELPER Helper = NULL;
+    PDETOUR_EXE_HELPER Helper = nullptr;
     BOOL Result = FALSE;
     _Field_range_(0, cSize - 4) DWORD cOffset = 0;
     DWORD cSize = 4;
 
-    if (pHelper == NULL) {
+    if (pHelper == nullptr) {
         goto Cleanup;
     }
-    *pHelper = NULL;
+    *pHelper = nullptr;
 
     if (nDlls < 1 || nDlls > 4096) {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_PARAMETER);
         goto Cleanup;
     }
 
@@ -1064,7 +1043,7 @@ BOOL WINAPI AllocExeHelper(_Out_ PDETOUR_EXE_HELPER *pHelper,
     }
 
     Helper = (PDETOUR_EXE_HELPER) new NOTHROW BYTE[sizeof(DETOUR_EXE_HELPER) + cSize];
-    if (Helper == NULL) {
+    if (Helper == nullptr) {
         goto Cleanup;
     }
 
@@ -1123,27 +1102,27 @@ BOOL WINAPI AllocExeHelper(_Out_ PDETOUR_EXE_HELPER *pHelper,
     }
 
     *pHelper = Helper;
-    Helper = NULL;
+    Helper = nullptr;
     Result = TRUE;
 
   Cleanup:
-    if (Helper != NULL) {
+    if (Helper != nullptr) {
         delete[] (PBYTE)Helper;
-        Helper = NULL;
+        Helper = nullptr;
     }
     return Result;
 }
 
 static
-VOID WINAPI FreeExeHelper(PDETOUR_EXE_HELPER *pHelper)
+VOID DETOURS_API FreeExeHelper(PDETOUR_EXE_HELPER *pHelper)
 {
-    if (*pHelper != NULL) {
+    if (*pHelper != nullptr) {
         delete[] (PBYTE)*pHelper;
-        *pHelper = NULL;
+        *pHelper = nullptr;
     }
 }
 
-BOOL WINAPI DetourProcessViaHelperA(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperA(_In_ DWORD dwTargetPid,
                                     _In_ LPCSTR lpDllName,
                                     _In_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA)
 {
@@ -1151,7 +1130,7 @@ BOOL WINAPI DetourProcessViaHelperA(_In_ DWORD dwTargetPid,
 }
 
 
-BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
                                         _In_ DWORD nDlls,
                                         _In_reads_(nDlls) LPCSTR *rlpDlls,
                                         _In_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA)
@@ -1161,13 +1140,13 @@ BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
     STARTUPINFOA si;
     CHAR szExe[MAX_PATH];
     CHAR szCommand[MAX_PATH];
-    PDETOUR_EXE_HELPER helper = NULL;
+    PDETOUR_EXE_HELPER helper = nullptr;
     HRESULT hr;
     DWORD nLen = GetEnvironmentVariableA("WINDIR", szExe, ARRAYSIZE(szExe));
 
     DETOUR_TRACE(("DetourProcessViaHelperDlls(pid=%d,dlls=%d)\n", dwTargetPid, nDlls));
     if (nDlls < 1 || nDlls > 4096) {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_PARAMETER);
         goto Cleanup;
     }
     if (!AllocExeHelper(&helper, dwTargetPid, nDlls, rlpDlls)) {
@@ -1197,18 +1176,18 @@ BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
         goto Cleanup;
     }
 
-    ZeroMemory(&pi, sizeof(pi));
-    ZeroMemory(&si, sizeof(si));
+    RtlSecureZeroMemory(&pi, sizeof(pi));
+    RtlSecureZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
 
     DETOUR_TRACE(("DetourProcessViaHelperDlls(\"%hs\", \"%hs\")\n", szExe, szCommand));
-    if (pfCreateProcessA(szExe, szCommand, NULL, NULL, FALSE, CREATE_SUSPENDED,
-                         NULL, NULL, &si, &pi)) {
+    if (pfCreateProcessA(szExe, szCommand, nullptr, nullptr, FALSE, CREATE_SUSPENDED,
+                         nullptr, nullptr, &si, &pi)) {
 
         if (!DetourCopyPayloadToProcess(pi.hProcess,
                                         DETOUR_EXE_HELPER_GUID,
                                         helper, helper->cb)) {
-            DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", GetLastError()));
+            DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", DetoursGetLastError()));
             TerminateProcess(pi.hProcess, ~0u);
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
@@ -1231,7 +1210,7 @@ BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
         Result = TRUE;
     }
     else {
-        DETOUR_TRACE(("CreateProcess failed: %d\n", GetLastError()));
+        DETOUR_TRACE(("CreateProcess failed: %d\n", DetoursGetLastError()));
         goto Cleanup;
     }
 
@@ -1240,14 +1219,14 @@ BOOL WINAPI DetourProcessViaHelperDllsA(_In_ DWORD dwTargetPid,
     return Result;
 }
 
-BOOL WINAPI DetourProcessViaHelperW(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperW(_In_ DWORD dwTargetPid,
                                     _In_ LPCSTR lpDllName,
                                     _In_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW)
 {
     return DetourProcessViaHelperDllsW(dwTargetPid, 1, &lpDllName, pfCreateProcessW);
 }
 
-BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
+BOOL DETOURS_API DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
                                         _In_ DWORD nDlls,
                                         _In_reads_(nDlls) LPCSTR *rlpDlls,
                                         _In_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW)
@@ -1257,13 +1236,13 @@ BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
     STARTUPINFOW si;
     WCHAR szExe[MAX_PATH];
     WCHAR szCommand[MAX_PATH];
-    PDETOUR_EXE_HELPER helper = NULL;
+    PDETOUR_EXE_HELPER helper = nullptr;
     HRESULT hr;
     DWORD nLen = GetEnvironmentVariableW(L"WINDIR", szExe, ARRAYSIZE(szExe));
 
     DETOUR_TRACE(("DetourProcessViaHelperDlls(pid=%d,dlls=%d)\n", dwTargetPid, nDlls));
     if (nDlls < 1 || nDlls > 4096) {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_PARAMETER);
         goto Cleanup;
     }
     if (!AllocExeHelper(&helper, dwTargetPid, nDlls, rlpDlls)) {
@@ -1293,18 +1272,18 @@ BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
         goto Cleanup;
     }
 
-    ZeroMemory(&pi, sizeof(pi));
-    ZeroMemory(&si, sizeof(si));
+    RtlSecureZeroMemory(&pi, sizeof(pi));
+    RtlSecureZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
 
     DETOUR_TRACE(("DetourProcessViaHelperDlls(\"%ls\", \"%ls\")\n", szExe, szCommand));
-    if (pfCreateProcessW(szExe, szCommand, NULL, NULL, FALSE, CREATE_SUSPENDED,
-                         NULL, NULL, &si, &pi)) {
+    if (pfCreateProcessW(szExe, szCommand, nullptr, nullptr, FALSE, CREATE_SUSPENDED,
+                         nullptr, nullptr, &si, &pi)) {
 
         if (!DetourCopyPayloadToProcess(pi.hProcess,
                                         DETOUR_EXE_HELPER_GUID,
                                         helper, helper->cb)) {
-            DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", GetLastError()));
+            DETOUR_TRACE(("DetourCopyPayloadToProcess failed: %d\n", DetoursGetLastError()));
             TerminateProcess(pi.hProcess, ~0u);
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
@@ -1329,7 +1308,7 @@ BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
         Result = TRUE;
     }
     else {
-        DETOUR_TRACE(("CreateProcess failed: %d\n", GetLastError()));
+        DETOUR_TRACE(("CreateProcess failed: %d\n", DetoursGetLastError()));
         goto Cleanup;
     }
 
@@ -1338,7 +1317,7 @@ BOOL WINAPI DetourProcessViaHelperDllsW(_In_ DWORD dwTargetPid,
     return Result;
 }
 
-BOOL WINAPI DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
                                           _Inout_opt_ LPSTR lpCommandLine,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -1351,14 +1330,14 @@ BOOL WINAPI DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
                                           _In_ LPCSTR lpDllName,
                                           _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA)
 {
-    if (pfCreateProcessA == NULL) {
+    if (pfCreateProcessA == nullptr) {
         pfCreateProcessA = CreateProcessA;
     }
 
     PROCESS_INFORMATION backup;
-    if (lpProcessInformation == NULL) {
+    if (lpProcessInformation == nullptr) {
         lpProcessInformation = &backup;
-        ZeroMemory(&backup, sizeof(backup));
+        RtlSecureZeroMemory(&backup, sizeof(backup));
     }
 
     if (!pfCreateProcessA(lpApplicationName,
@@ -1399,7 +1378,7 @@ BOOL WINAPI DetourCreateProcessWithDllExA(_In_opt_ LPCSTR lpApplicationName,
     return TRUE;
 }
 
-BOOL WINAPI DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
                                           _Inout_opt_  LPWSTR lpCommandLine,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                           _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -1412,14 +1391,14 @@ BOOL WINAPI DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
                                           _In_ LPCSTR lpDllName,
                                           _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW)
 {
-    if (pfCreateProcessW == NULL) {
+    if (pfCreateProcessW == nullptr) {
         pfCreateProcessW = CreateProcessW;
     }
 
     PROCESS_INFORMATION backup;
-    if (lpProcessInformation == NULL) {
+    if (lpProcessInformation == nullptr) {
         lpProcessInformation = &backup;
-        ZeroMemory(&backup, sizeof(backup));
+        RtlSecureZeroMemory(&backup, sizeof(backup));
     }
 
     if (!pfCreateProcessW(lpApplicationName,
@@ -1460,7 +1439,7 @@ BOOL WINAPI DetourCreateProcessWithDllExW(_In_opt_ LPCWSTR lpApplicationName,
     return TRUE;
 }
 
-BOOL WINAPI DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
                                          _Inout_opt_ LPSTR lpCommandLine,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -1474,14 +1453,14 @@ BOOL WINAPI DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
                                          _In_reads_(nDlls) LPCSTR *rlpDlls,
                                          _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEA pfCreateProcessA)
 {
-    if (pfCreateProcessA == NULL) {
+    if (pfCreateProcessA == nullptr) {
         pfCreateProcessA = CreateProcessA;
     }
 
     PROCESS_INFORMATION backup;
-    if (lpProcessInformation == NULL) {
+    if (lpProcessInformation == nullptr) {
         lpProcessInformation = &backup;
-        ZeroMemory(&backup, sizeof(backup));
+        RtlSecureZeroMemory(&backup, sizeof(backup));
     }
 
     if (!pfCreateProcessA(lpApplicationName,
@@ -1521,7 +1500,7 @@ BOOL WINAPI DetourCreateProcessWithDllsA(_In_opt_ LPCSTR lpApplicationName,
     return TRUE;
 }
 
-BOOL WINAPI DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
+BOOL DETOURS_API DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
                                          _Inout_opt_ LPWSTR lpCommandLine,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                          _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
@@ -1535,14 +1514,14 @@ BOOL WINAPI DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
                                          _In_reads_(nDlls) LPCSTR *rlpDlls,
                                          _In_opt_ PDETOUR_CREATE_PROCESS_ROUTINEW pfCreateProcessW)
 {
-    if (pfCreateProcessW == NULL) {
+    if (pfCreateProcessW == nullptr) {
         pfCreateProcessW = CreateProcessW;
     }
 
     PROCESS_INFORMATION backup;
-    if (lpProcessInformation == NULL) {
+    if (lpProcessInformation == nullptr) {
         lpProcessInformation = &backup;
-        ZeroMemory(&backup, sizeof(backup));
+        RtlSecureZeroMemory(&backup, sizeof(backup));
     }
 
     if (!pfCreateProcessW(lpApplicationName,
@@ -1581,6 +1560,8 @@ BOOL WINAPI DetourCreateProcessWithDllsW(_In_opt_ LPCWSTR lpApplicationName,
     }
     return TRUE;
 }
+
+#endif // DetoursUserMode
 
 //
 ///////////////////////////////////////////////////////////////// End of File.

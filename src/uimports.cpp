@@ -10,7 +10,7 @@
 //  (once for each supported module format).
 //
 
-#if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
+#if DETOURS_VERSION != DETOURS_VERSION_4
 #error detours.h version mismatch
 #endif
 
@@ -83,9 +83,9 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
             || cbRead < sizeof(ish)) {
 
             DETOUR_TRACE(("ReadProcessMemory(ish@%p..%p) failed: %d\n",
-                          pbModule + dwSec + sizeof(ish) * i,
-                          pbModule + dwSec + sizeof(ish) * (i + 1),
-                          GetLastError()));
+                pbModule + (size_t)dwSec + sizeof(ish) * i,
+                pbModule + (size_t)dwSec + sizeof(ish) * ((size_t)i + 1),
+                GetLastError()));
             goto finish;
         }
 
@@ -101,7 +101,7 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
         }
     }
 
-    DETOUR_TRACE(("     Imports: %p..%p\n",
+    DETOUR_TRACE(("     Imports: %Ix..%Ix\n",
                   (DWORD_PTR)pbModule + inh.IMPORT_DIRECTORY.VirtualAddress,
                   (DWORD_PTR)pbModule + inh.IMPORT_DIRECTORY.VirtualAddress +
                   inh.IMPORT_DIRECTORY.Size));
@@ -118,7 +118,7 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
     }
 
     _Analysis_assume_(cbNew >
-                      sizeof(IMAGE_IMPORT_DESCRIPTOR) * (nDlls + nOldDlls)
+                      sizeof(IMAGE_IMPORT_DESCRIPTOR) * ((size_t)nDlls + (size_t)nOldDlls)
                       + sizeof(DWORD_XX) * 4 * nDlls);
     pbNew = new BYTE [cbNew];
     if (pbNew == NULL) {
@@ -181,13 +181,13 @@ static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
             goto finish;
         }
 
-        DWORD nOffset = obTab + (sizeof(DWORD_XX) * (4 * n));
+        DWORD nOffset = obTab + (sizeof(DWORD_XX) * (4 * (size_t)n));
         piid[n].OriginalFirstThunk = obBase + nOffset;
         pt = ((DWORD_XX*)(pbNew + nOffset));
         pt[0] = IMAGE_ORDINAL_FLAG_XX + 1;
         pt[1] = 0;
 
-        nOffset = obTab + (sizeof(DWORD_XX) * ((4 * n) + 2));
+        nOffset = obTab + (DWORD)(sizeof(DWORD_XX) * ((4 * (size_t)n) + 2));
         piid[n].FirstThunk = obBase + nOffset;
         pt = ((DWORD_XX*)(pbNew + nOffset));
         pt[0] = IMAGE_ORDINAL_FLAG_XX + 1;

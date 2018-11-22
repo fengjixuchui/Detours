@@ -9,38 +9,10 @@
 //  Used for for payloads, byways, and imports.
 //
 
-#if _MSC_VER >= 1900
-#pragma warning(push)
-#pragma warning(disable:4091) // empty typedef
-#endif
-#define _CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS 1
-#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
-#include <windows.h>
-#if _MSC_VER >= 1310
-#pragma warning(push)
-#if _MSC_VER > 1400
-#pragma warning(disable:6102 6103) // /analyze warnings
-#endif
-#include <strsafe.h>
-#pragma warning(pop)
-#endif
+#include "internal.h"
 
-#if (_MSC_VER < 1299)
-#pragma warning(disable: 4710)
-#endif
 
-// #define DETOUR_DEBUG 1
-#define DETOURS_INTERNAL
-
-#include "detours.h"
-
-#if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
-#error detours.h version mismatch
-#endif
-
-#if _MSC_VER >= 1900
-#pragma warning(pop)
-#endif
+#ifdef DetoursUserMode
 
 namespace Detour
 {
@@ -139,6 +111,7 @@ static inline HRESULT StringCchCatA(
 
 ///////////////////////////////////////////////////////////////////////////////
 //
+
 class CImageData
 {
     friend class CImage;
@@ -162,9 +135,9 @@ protected:
 
 protected:
     _Field_size_(m_cbAlloc)
-    PBYTE                   m_pbData;
-    DWORD                   m_cbData;
-    DWORD                   m_cbAlloc;
+    PBYTE                   m_pbData    = nullptr;
+    DWORD                   m_cbData    = 0;
+    DWORD                   m_cbAlloc   = 0;
 };
 
 class CImageImportFile
@@ -177,19 +150,19 @@ public:
     ~CImageImportFile();
 
 public:
-    CImageImportFile *      m_pNextFile;
-    BOOL                    m_fByway;
+    CImageImportFile *      m_pNextFile = nullptr;
+    BOOL                    m_fByway    = FALSE;
 
     _Field_size_(m_nImportNames)
-    CImageImportName *      m_pImportNames;
-    DWORD                   m_nImportNames;
+    CImageImportName *      m_pImportNames = nullptr;
+    DWORD                   m_nImportNames = 0;
 
-    DWORD                   m_rvaOriginalFirstThunk;
-    DWORD                   m_rvaFirstThunk;
+    DWORD                   m_rvaOriginalFirstThunk = 0;
+    DWORD                   m_rvaFirstThunk         = 0;
 
-    DWORD                   m_nForwarderChain;
-    LPCSTR                  m_pszOrig;
-    LPCSTR                  m_pszName;
+    DWORD                   m_nForwarderChain   = 0;
+    LPCSTR                  m_pszOrig           = nullptr;
+    LPCSTR                  m_pszName           = nullptr;
 };
 
 class CImageImportName
@@ -202,11 +175,11 @@ public:
     ~CImageImportName();
 
 public:
-    WORD        m_nHint;
-    ULONG       m_nOrig;
-    ULONG       m_nOrdinal;
-    LPCSTR      m_pszOrig;
-    LPCSTR      m_pszName;
+    WORD        m_nHint     = 0;
+    ULONG       m_nOrig     = 0;
+    ULONG       m_nOrdinal  = 0;
+    LPCSTR      m_pszOrig   = nullptr;
+    LPCSTR      m_pszName   = nullptr;
 };
 
 class CImage
@@ -265,40 +238,40 @@ protected:
     CImageImportFile *      NewByway(_In_ LPCSTR pszName);
 
 private:
-    DWORD                   m_dwValidSignature;
-    CImageData *            m_pImageData;               // Read & Write
+    DWORD                   m_dwValidSignature  = 0;
+    CImageData *            m_pImageData        = nullptr;  // Read & Write
 
-    HANDLE                  m_hMap;                     // Read & Write
-    PBYTE                   m_pMap;                     // Read & Write
+    HANDLE                  m_hMap              = nullptr;  // Read & Write
+    PBYTE                   m_pMap              = nullptr;  // Read & Write
 
-    DWORD                   m_nNextFileAddr;            // Write
-    DWORD                   m_nNextVirtAddr;            // Write
+    DWORD                   m_nNextFileAddr     = 0;        // Write
+    DWORD                   m_nNextVirtAddr     = 0;        // Write
 
-    IMAGE_DOS_HEADER        m_DosHeader;                // Read & Write
-    IMAGE_NT_HEADERS        m_NtHeader;                 // Read & Write
-    IMAGE_SECTION_HEADER    m_SectionHeaders[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+    IMAGE_DOS_HEADER        m_DosHeader         = { 0 };    // Read & Write
+    IMAGE_NT_HEADERS        m_NtHeader          = { 0 };    // Read & Write
+    IMAGE_SECTION_HEADER    m_SectionHeaders[IMAGE_NUMBEROF_DIRECTORY_ENTRIES] = { 0 };
 
-    DWORD                   m_nPrePE;
-    DWORD                   m_cbPrePE;
-    DWORD                   m_cbPostPE;
+    DWORD                   m_nPrePE    = 0;
+    DWORD                   m_cbPrePE   = 0;
+    DWORD                   m_cbPostPE  = 0;
 
-    DWORD                   m_nPeOffset;
-    DWORD                   m_nSectionsOffset;
-    DWORD                   m_nExtraOffset;
-    DWORD                   m_nFileSize;
+    DWORD                   m_nPeOffset = 0;
+    DWORD                   m_nSectionsOffset   = 0;
+    DWORD                   m_nExtraOffset      = 0;
+    DWORD                   m_nFileSize         = 0;
 
-    DWORD                   m_nOutputVirtAddr;
-    DWORD                   m_nOutputVirtSize;
-    DWORD                   m_nOutputFileAddr;
+    DWORD                   m_nOutputVirtAddr   = 0;
+    DWORD                   m_nOutputVirtSize   = 0;
+    DWORD                   m_nOutputFileAddr   = 0;
 
     _Field_size_(m_cbOutputBuffer)
-    PBYTE                   m_pbOutputBuffer;
-    DWORD                   m_cbOutputBuffer;
+    PBYTE                   m_pbOutputBuffer    = nullptr;
+    DWORD                   m_cbOutputBuffer    = 0;
 
-    CImageImportFile *      m_pImportFiles;
-    DWORD                   m_nImportFiles;
+    CImageImportFile *      m_pImportFiles      = nullptr;
+    DWORD                   m_nImportFiles      = 0;
 
-    BOOL                    m_fHadDetourSection;
+    BOOL                    m_fHadDetourSection = FALSE;
 
 private:
     enum {
@@ -331,27 +304,27 @@ static inline DWORD QuadAlign(DWORD a)
 
 static LPCSTR DuplicateString(_In_ LPCSTR pszIn)
 {
-    if (pszIn == NULL) {
-        return NULL;
+    if (pszIn == nullptr) {
+        return nullptr;
     }
 
     size_t cch;
     HRESULT hr = StringCchLengthA(pszIn, 8192, &cch);
     if (FAILED(hr)) {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return NULL;
+        DetoursSetLastError(DETOURS_STATUS_INVALID_PARAMETER);
+        return nullptr;
     }
 
     PCHAR pszOut = new NOTHROW CHAR [cch + 1];
-    if (pszOut == NULL) {
-        SetLastError(ERROR_OUTOFMEMORY);
-        return NULL;
+    if (pszOut == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_OUTOFMEMORY);
+        return nullptr;
     }
 
     hr = StringCchCopyA(pszOut, cch + 1, pszIn);
     if (FAILED(hr)) {
         delete[] pszOut;
-        return NULL;
+        return nullptr;
     }
 
     return pszOut;
@@ -359,7 +332,7 @@ static LPCSTR DuplicateString(_In_ LPCSTR pszIn)
 
 static VOID ReleaseString(_In_opt_ LPCSTR psz)
 {
-    if (psz != NULL) {
+    if (psz != nullptr) {
         delete[] psz;
     }
 }
@@ -368,38 +341,38 @@ static VOID ReleaseString(_In_opt_ LPCSTR psz)
 //
 CImageImportFile::CImageImportFile()
 {
-    m_pNextFile = NULL;
+    m_pNextFile = nullptr;
     m_fByway = FALSE;
 
-    m_pImportNames = NULL;
+    m_pImportNames = nullptr;
     m_nImportNames = 0;
 
     m_rvaOriginalFirstThunk = 0;
     m_rvaFirstThunk = 0;
 
     m_nForwarderChain = (UINT)0;
-    m_pszName = NULL;
-    m_pszOrig = NULL;
+    m_pszName = nullptr;
+    m_pszOrig = nullptr;
 }
 
 CImageImportFile::~CImageImportFile()
 {
     if (m_pNextFile) {
         delete m_pNextFile;
-        m_pNextFile = NULL;
+        m_pNextFile = nullptr;
     }
     if (m_pImportNames) {
         delete[] m_pImportNames;
-        m_pImportNames = NULL;
+        m_pImportNames = nullptr;
         m_nImportNames = 0;
     }
     if (m_pszName) {
         delete[] m_pszName;
-        m_pszName = NULL;
+        m_pszName = nullptr;
     }
     if (m_pszOrig) {
         delete[] m_pszOrig;
-        m_pszOrig = NULL;
+        m_pszOrig = nullptr;
     }
 }
 
@@ -408,19 +381,19 @@ CImageImportName::CImageImportName()
     m_nOrig = 0;
     m_nOrdinal = 0;
     m_nHint = 0;
-    m_pszName = NULL;
-    m_pszOrig = NULL;
+    m_pszName = nullptr;
+    m_pszOrig = nullptr;
 }
 
 CImageImportName::~CImageImportName()
 {
     if (m_pszName) {
         delete[] m_pszName;
-        m_pszName = NULL;
+        m_pszName = nullptr;
     }
     if (m_pszOrig) {
         delete[] m_pszOrig;
-        m_pszOrig = NULL;
+        m_pszOrig = nullptr;
     }
 }
 
@@ -438,11 +411,11 @@ CImageData::~CImageData()
     IsValid();
 
     if (m_cbAlloc == 0) {
-        m_pbData = NULL;
+        m_pbData = nullptr;
     }
     if (m_pbData) {
         delete[] m_pbData;
-        m_pbData = NULL;
+        m_pbData = nullptr;
     }
     m_cbData = 0;
     m_cbAlloc = 0;
@@ -457,17 +430,17 @@ BOOL CImageData::SizeTo(DWORD cbData)
     }
 
     PBYTE pbNew = new NOTHROW BYTE [cbData];
-    if (pbNew == NULL) {
-        SetLastError(ERROR_OUTOFMEMORY);
+    if (pbNew == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_OUTOFMEMORY);
         return FALSE;
     }
 
     if (m_pbData) {
-        CopyMemory(pbNew, m_pbData, m_cbData);
+        memcpy(pbNew, m_pbData, m_cbData);
         if (m_cbAlloc > 0) {
             delete[] m_pbData;
         }
-        m_pbData = NULL;
+        m_pbData = nullptr;
     }
     m_pbData = pbNew;
     m_cbAlloc = cbData;
@@ -488,7 +461,7 @@ BOOL CImageData::Purge()
 
 BOOL CImageData::IsValid()
 {
-    if (m_pbData == NULL) {
+    if (m_pbData == nullptr) {
         return TRUE;
     }
 
@@ -514,16 +487,16 @@ PBYTE CImageData::Enumerate(GUID *pGuid, DWORD *pcbData, DWORD *pnIterator)
 {
     IsValid();
 
-    if (pnIterator == NULL ||
+    if (pnIterator == nullptr ||
         m_cbData < *pnIterator + sizeof(DETOUR_SECTION_RECORD)) {
 
         if (pcbData) {
             *pcbData = 0;
         }
         if (pGuid) {
-            ZeroMemory(pGuid, sizeof(*pGuid));
+            RtlSecureZeroMemory(pGuid, sizeof(*pGuid));
         }
-        return NULL;
+        return nullptr;
     }
 
     PDETOUR_SECTION_RECORD pRecord = (PDETOUR_SECTION_RECORD)(m_pbData + *pnIterator);
@@ -575,19 +548,19 @@ PBYTE CImageData::Find(REFGUID rguid, DWORD *pcbData)
     if (pcbData) {
         *pcbData = 0;
     }
-    return NULL;
+    return nullptr;
 }
 
 BOOL CImageData::Delete(REFGUID rguid)
 {
     IsValid();
 
-    PBYTE pbFound = NULL;
+    PBYTE pbFound = nullptr;
     DWORD cbFound = 0;
 
     pbFound = Find(rguid, &cbFound);
-    if (pbFound == NULL) {
-        SetLastError(ERROR_MOD_NOT_FOUND);
+    if (pbFound == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_MOD_NOT_FOUND);
         return FALSE;
     }
 
@@ -598,7 +571,7 @@ BOOL CImageData::Delete(REFGUID rguid)
     DWORD cbRestData = m_cbData - (LONG)(pbRestData - m_pbData);
 
     if (cbRestData) {
-        MoveMemory(pbFound, pbRestData, cbRestData);
+        memmove(pbFound, pbRestData, cbRestData);
     }
     m_cbData -= cbFound;
 
@@ -614,7 +587,7 @@ PBYTE CImageData::Set(REFGUID rguid, PBYTE pbData, DWORD cbData)
     DWORD cbAlloc = QuadAlign(cbData);
 
     if (!SizeTo(m_cbData + cbAlloc + sizeof(DETOUR_SECTION_RECORD))) {
-        return NULL;
+        return nullptr;
     }
 
     PDETOUR_SECTION_RECORD pRecord = (PDETOUR_SECTION_RECORD)(m_pbData + m_cbData);
@@ -624,14 +597,14 @@ PBYTE CImageData::Set(REFGUID rguid, PBYTE pbData, DWORD cbData)
 
     PBYTE pbDest = (PBYTE)(pRecord + 1);
     if (pbData) {
-        CopyMemory(pbDest, pbData, cbData);
+        memcpy(pbDest, pbData, cbData);
         if (cbData < cbAlloc) {
-            ZeroMemory(pbDest + cbData, cbAlloc - cbData);
+            RtlSecureZeroMemory(pbDest + cbData, cbAlloc - cbData);
         }
     }
     else {
         if (cbAlloc > 0) {
-            ZeroMemory(pbDest, cbAlloc);
+            RtlSecureZeroMemory(pbDest, cbAlloc);
         }
     }
 
@@ -646,11 +619,11 @@ PBYTE CImageData::Set(REFGUID rguid, PBYTE pbData, DWORD cbData)
 class CImageThunks
 {
 private:
-    CImage *            m_pImage;
-    PIMAGE_THUNK_DATA   m_pThunks;
-    DWORD               m_nThunks;
-    DWORD               m_nThunksMax;
-    DWORD               m_nThunkVirtAddr;
+    CImage *            m_pImage        = nullptr;
+    PIMAGE_THUNK_DATA   m_pThunks       = nullptr;
+    DWORD               m_nThunks       = 0;
+    DWORD               m_nThunksMax    = 0;
+    DWORD               m_nThunkVirtAddr= 0;
 
 public:
     CImageThunks(CImage *pImage, DWORD nThunksMax, DWORD *pnAddr)
@@ -671,7 +644,7 @@ public:
             return m_pThunks;
         }
         *pnVirtAddr = 0;
-        return NULL;
+        return nullptr;
     }
 
     PIMAGE_THUNK_DATA Allocate(ULONG_PTR nData, DWORD *pnVirtAddr)
@@ -685,7 +658,7 @@ public:
             return m_pThunks++;
         }
         *pnVirtAddr = 0;
-        return NULL;
+        return nullptr;
     }
 
     DWORD   Size()
@@ -699,11 +672,11 @@ public:
 class CImageChars
 {
 private:
-    CImage *        m_pImage;
-    PCHAR           m_pChars;
-    DWORD           m_nChars;
-    DWORD           m_nCharsMax;
-    DWORD           m_nCharVirtAddr;
+    CImage *        m_pImage    = nullptr;
+    PCHAR           m_pChars    = nullptr;
+    DWORD           m_nChars    = 0;
+    DWORD           m_nCharsMax = 0;
+    DWORD           m_nCharVirtAddr = 0;
 
 public:
     CImageChars(CImage *pImage, _In_ DWORD nCharsMax, _Out_ DWORD *pnAddr)
@@ -722,14 +695,14 @@ public:
 
         if (m_nChars + nLen > m_nCharsMax) {
             *pnVirtAddr = 0;
-            return NULL;
+            return nullptr;
         }
 
         *pnVirtAddr = m_nCharVirtAddr;
         HRESULT hrRet = StringCchCopyA(m_pChars, m_nCharsMax, pszString);
 
         if (FAILED(hrRet)) {
-            return NULL;
+            return nullptr;
         }
 
         pszString = m_pChars;
@@ -748,7 +721,7 @@ public:
 
         if (m_nChars + nLen > m_nCharsMax) {
             *pnVirtAddr = 0;
-            return NULL;
+            return nullptr;
         }
 
         *pnVirtAddr = m_nCharVirtAddr;
@@ -756,7 +729,7 @@ public:
 
         HRESULT hrRet = StringCchCopyA(m_pChars + sizeof(USHORT), m_nCharsMax, pszString);
         if (FAILED(hrRet)) {
-            return NULL;
+            return nullptr;
         }
 
         pszString = m_pChars + sizeof(USHORT);
@@ -785,26 +758,26 @@ CImage * CImage::IsValid(PDETOUR_BINARY pBinary)
             return pImage;
         }
     }
-    SetLastError(ERROR_INVALID_HANDLE);
-    return NULL;
+    DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
+    return nullptr;
 }
 
 CImage::CImage()
 {
     m_dwValidSignature = (DWORD)DETOUR_IMAGE_VALID_SIGNATURE;
 
-    m_hMap = NULL;
-    m_pMap = NULL;
+    m_hMap = nullptr;
+    m_pMap = nullptr;
 
     m_nPeOffset = 0;
     m_nSectionsOffset = 0;
 
-    m_pbOutputBuffer = NULL;
+    m_pbOutputBuffer = nullptr;
     m_cbOutputBuffer = 0;
 
-    m_pImageData = NULL;
+    m_pImageData = nullptr;
 
-    m_pImportFiles = NULL;
+    m_pImportFiles = nullptr;
     m_nImportFiles = 0;
 
     m_fHadDetourSection = FALSE;
@@ -820,28 +793,28 @@ BOOL CImage::Close()
 {
     if (m_pImportFiles) {
         delete m_pImportFiles;
-        m_pImportFiles = NULL;
+        m_pImportFiles = nullptr;
         m_nImportFiles = 0;
     }
 
     if (m_pImageData) {
         delete m_pImageData;
-        m_pImageData = NULL;
+        m_pImageData = nullptr;
     }
 
-    if (m_pMap != NULL) {
+    if (m_pMap != nullptr) {
         UnmapViewOfFile(m_pMap);
-        m_pMap = NULL;
+        m_pMap = nullptr;
     }
 
     if (m_hMap) {
         CloseHandle(m_hMap);
-        m_hMap = NULL;
+        m_hMap = nullptr;
     }
 
     if (m_pbOutputBuffer) {
         delete[] m_pbOutputBuffer;
-        m_pbOutputBuffer = NULL;
+        m_pbOutputBuffer = nullptr;
         m_cbOutputBuffer = 0;
     }
     return TRUE;
@@ -851,31 +824,31 @@ BOOL CImage::Close()
 //
 PBYTE CImage::DataEnum(GUID *pGuid, DWORD *pcbData, DWORD *pnIterator)
 {
-    if (m_pImageData == NULL) {
-        return NULL;
+    if (m_pImageData == nullptr) {
+        return nullptr;
     }
     return m_pImageData->Enumerate(pGuid, pcbData, pnIterator);
 }
 
 PBYTE CImage::DataFind(REFGUID rguid, DWORD *pcbData)
 {
-    if (m_pImageData == NULL) {
-        return NULL;
+    if (m_pImageData == nullptr) {
+        return nullptr;
     }
     return m_pImageData->Find(rguid, pcbData);
 }
 
 PBYTE CImage::DataSet(REFGUID rguid, PBYTE pbData, DWORD cbData)
 {
-    if (m_pImageData == NULL) {
-        return NULL;
+    if (m_pImageData == nullptr) {
+        return nullptr;
     }
     return m_pImageData->Set(rguid, pbData, cbData);
 }
 
 BOOL CImage::DataDelete(REFGUID rguid)
 {
-    if (m_pImageData == NULL) {
+    if (m_pImageData == nullptr) {
         return FALSE;
     }
     return m_pImageData->Delete(rguid);
@@ -883,7 +856,7 @@ BOOL CImage::DataDelete(REFGUID rguid)
 
 BOOL CImage::DataPurge()
 {
-    if (m_pImageData == NULL) {
+    if (m_pImageData == nullptr) {
         return TRUE;
     }
     return m_pImageData->Purge();
@@ -900,19 +873,19 @@ BOOL CImage::SizeOutputBuffer(DWORD cbData)
         cbData = FileAlign(cbData);
 
         PBYTE pOutput = new NOTHROW BYTE [cbData];
-        if (pOutput == NULL) {
-            SetLastError(ERROR_OUTOFMEMORY);
+        if (pOutput == nullptr) {
+            DetoursSetLastError(DETOURS_STATUS_OUTOFMEMORY);
             return FALSE;
         }
 
         if (m_pbOutputBuffer) {
-            CopyMemory(pOutput, m_pbOutputBuffer, m_cbOutputBuffer);
+            memcpy(pOutput, m_pbOutputBuffer, m_cbOutputBuffer);
 
             delete[] m_pbOutputBuffer;
-            m_pbOutputBuffer = NULL;
+            m_pbOutputBuffer = nullptr;
         }
 
-        ZeroMemory(pOutput + m_cbOutputBuffer, cbData - m_cbOutputBuffer),
+        RtlSecureZeroMemory(pOutput + m_cbOutputBuffer, cbData - m_cbOutputBuffer),
 
         m_pbOutputBuffer = pOutput;
         m_cbOutputBuffer = cbData;
@@ -930,11 +903,11 @@ PBYTE CImage::AllocateOutput(DWORD cbData, DWORD *pnVirtAddr)
     m_nOutputVirtSize += cbData;
 
     if (m_nOutputVirtSize > m_cbOutputBuffer) {
-        SetLastError(ERROR_OUTOFMEMORY);
-        return NULL;
+        DetoursSetLastError(DETOURS_STATUS_OUTOFMEMORY);
+        return nullptr;
     }
 
-    ZeroMemory(pbData, cbData);
+    RtlSecureZeroMemory(pbData, cbData);
 
     return pbData;
 }
@@ -956,7 +929,7 @@ DWORD CImage::SectionAlign(DWORD nAddr)
 PVOID CImage::RvaToVa(ULONG_PTR nRva)
 {
     if (nRva == 0) {
-        return NULL;
+        return nullptr;
     }
 
     for (DWORD n = 0; n < m_NtHeader.FileHeader.NumberOfSections; n++) {
@@ -969,7 +942,7 @@ PVOID CImage::RvaToVa(ULONG_PTR nRva)
                 + nRva - m_SectionHeaders[n].VirtualAddress;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 DWORD CImage::RvaToFileOffset(DWORD nRva)
@@ -996,7 +969,7 @@ BOOL CImage::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWri
                        lpBuffer,
                        nNumberOfBytesToWrite,
                        lpNumberOfBytesWritten,
-                       NULL);
+                       nullptr);
 }
 
 
@@ -1012,7 +985,7 @@ BOOL CImage::ZeroFileData(HANDLE hFile, DWORD cbData)
         return FALSE;
     }
 
-    ZeroMemory(m_pbOutputBuffer, 4096);
+    RtlSecureZeroMemory(m_pbOutputBuffer, 4096);
 
     for (DWORD cbLeft = cbData; cbLeft > 0;) {
         DWORD cbStep = cbLeft > sizeof(m_pbOutputBuffer)
@@ -1040,7 +1013,7 @@ BOOL CImage::AlignFileData(HANDLE hFile)
 
     if (hFile != INVALID_HANDLE_VALUE) {
         if (m_nNextFileAddr > nLastFileAddr) {
-            if (SetFilePointer(hFile, nLastFileAddr, NULL, FILE_BEGIN) == ~0u) {
+            if (SetFilePointer(hFile, nLastFileAddr, nullptr, FILE_BEGIN) == ~0u) {
                 return FALSE;
             }
             return ZeroFileData(hFile, m_nNextFileAddr - nLastFileAddr);
@@ -1052,28 +1025,28 @@ BOOL CImage::AlignFileData(HANDLE hFile)
 BOOL CImage::Read(HANDLE hFile)
 {
     DWORD n;
-    PBYTE pbData = NULL;
+    PBYTE pbData = nullptr;
     DWORD cbData = 0;
 
     if (hFile == INVALID_HANDLE_VALUE) {
-        SetLastError(ERROR_INVALID_HANDLE);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
         return FALSE;
     }
 
     ///////////////////////////////////////////////////////// Create mapping.
     //
-    m_nFileSize = GetFileSize(hFile, NULL);
+    m_nFileSize = GetFileSize(hFile, nullptr);
     if (m_nFileSize == (DWORD)-1) {
         return FALSE;
     }
 
-    m_hMap = CreateFileMappingW(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
-    if (m_hMap == NULL) {
+    m_hMap = CreateFileMappingW(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if (m_hMap == nullptr) {
         return FALSE;
     }
 
-    m_pMap = (PBYTE)MapViewOfFileEx(m_hMap, FILE_MAP_READ, 0, 0, 0, NULL);
-    if (m_pMap == NULL) {
+    m_pMap = (PBYTE)MapViewOfFileEx(m_hMap, FILE_MAP_READ, 0, 0, 0, nullptr);
+    if (m_pMap == nullptr) {
         return FALSE;
     }
 
@@ -1081,7 +1054,7 @@ BOOL CImage::Read(HANDLE hFile)
     //
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)m_pMap;
     if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-        SetLastError(ERROR_BAD_EXE_FORMAT);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
     m_nPeOffset = pDosHeader->e_lfanew;
@@ -1091,21 +1064,21 @@ BOOL CImage::Read(HANDLE hFile)
     if (m_nPeOffset > m_nFileSize ||
         m_nPeOffset + sizeof(m_NtHeader) > m_nFileSize) {
 
-        SetLastError(ERROR_BAD_EXE_FORMAT);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
 
-    CopyMemory(&m_DosHeader, m_pMap + m_nPrePE, sizeof(m_DosHeader));
+    memcpy(&m_DosHeader, m_pMap + m_nPrePE, sizeof(m_DosHeader));
 
     /////////////////////////////////////////////////////// Process PE Header.
     //
-    CopyMemory(&m_NtHeader, m_pMap + m_nPeOffset, sizeof(m_NtHeader));
+    memcpy(&m_NtHeader, m_pMap + m_nPeOffset, sizeof(m_NtHeader));
     if (m_NtHeader.Signature != IMAGE_NT_SIGNATURE) {
-        SetLastError(ERROR_INVALID_EXE_SIGNATURE);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_EXE_SIGNATURE);
         return FALSE;
     }
     if (m_NtHeader.FileHeader.SizeOfOptionalHeader == 0) {
-        SetLastError(ERROR_EXE_MARKED_INVALID);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
     m_nSectionsOffset = m_nPeOffset
@@ -1116,10 +1089,10 @@ BOOL CImage::Read(HANDLE hFile)
     ///////////////////////////////////////////////// Process Section Headers.
     //
     if (m_NtHeader.FileHeader.NumberOfSections > ARRAYSIZE(m_SectionHeaders)) {
-        SetLastError(ERROR_EXE_MARKED_INVALID);
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
-    CopyMemory(&m_SectionHeaders,
+    memcpy(&m_SectionHeaders,
                m_pMap + m_nSectionsOffset,
                sizeof(m_SectionHeaders[0]) * m_NtHeader.FileHeader.NumberOfSections);
 
@@ -1134,7 +1107,7 @@ BOOL CImage::Read(HANDLE hFile)
     for (n = 0; n < m_NtHeader.FileHeader.NumberOfSections; n++) {
         if (strcmp((PCHAR)m_SectionHeaders[n].Name, ".detour") == 0) {
             DETOUR_SECTION_HEADER dh;
-            CopyMemory(&dh,
+            memcpy(&dh,
                        m_pMap + m_SectionHeaders[n].PointerToRawData,
                        sizeof(dh));
 
@@ -1157,11 +1130,11 @@ BOOL CImage::Read(HANDLE hFile)
     PIMAGE_IMPORT_DESCRIPTOR oidp
         = (PIMAGE_IMPORT_DESCRIPTOR)RvaToVa(rvaOriginalImageDirectory);
 
-    if (oidp == NULL) {
+    if (oidp == nullptr) {
         oidp = iidp;
     }
-    if (iidp == NULL || oidp == NULL) {
-        SetLastError(ERROR_EXE_MARKED_INVALID);
+    if (iidp == nullptr || oidp == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
         return FALSE;
     }
 
@@ -1170,19 +1143,19 @@ BOOL CImage::Read(HANDLE hFile)
     }
 
     CImageImportFile **ppLastFile = &m_pImportFiles;
-    m_pImportFiles = NULL;
+    m_pImportFiles = nullptr;
 
     for (n = 0; n < nFiles; n++, iidp++) {
         ULONG_PTR rvaName = iidp->Name;
         PCHAR pszName = (PCHAR)RvaToVa(rvaName);
-        if (pszName == NULL) {
-            SetLastError(ERROR_EXE_MARKED_INVALID);
+        if (pszName == nullptr) {
+            DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
             goto fail;
         }
 
         CImageImportFile *pImportFile = new NOTHROW CImageImportFile;
-        if (pImportFile == NULL) {
-            SetLastError(ERROR_OUTOFMEMORY);
+        if (pImportFile == nullptr) {
+            DetoursSetLastError(DETOURS_STATUS_INSUFFICIENT_RESOURCES);
             goto fail;
         }
 
@@ -1191,33 +1164,33 @@ BOOL CImage::Read(HANDLE hFile)
         m_nImportFiles++;
 
         pImportFile->m_pszName = DuplicateString(pszName);
-        if (pImportFile->m_pszName == NULL) {
+        if (pImportFile->m_pszName == nullptr) {
             goto fail;
         }
 
         pImportFile->m_rvaOriginalFirstThunk = iidp->OriginalFirstThunk;
         pImportFile->m_rvaFirstThunk = iidp->FirstThunk;
         pImportFile->m_nForwarderChain = iidp->ForwarderChain;
-        pImportFile->m_pImportNames = NULL;
+        pImportFile->m_pImportNames = nullptr;
         pImportFile->m_nImportNames = 0;
         pImportFile->m_fByway = FALSE;
 
         if ((ULONG)iidp->FirstThunk >= rvaDetourBeg &&
             (ULONG)iidp->FirstThunk < rvaDetourEnd) {
 
-            pImportFile->m_pszOrig = NULL;
+            pImportFile->m_pszOrig = nullptr;
             pImportFile->m_fByway = TRUE;
             continue;
         }
 
         rvaName = oidp->Name;
         pszName = (PCHAR)RvaToVa(rvaName);
-        if (pszName == NULL) {
-            SetLastError(ERROR_EXE_MARKED_INVALID);
+        if (pszName == nullptr) {
+            DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
             goto fail;
         }
         pImportFile->m_pszOrig = DuplicateString(pszName);
-        if (pImportFile->m_pszOrig == NULL) {
+        if (pImportFile->m_pszOrig == nullptr) {
             goto fail;
         }
 
@@ -1241,8 +1214,8 @@ BOOL CImage::Read(HANDLE hFile)
         if (pAddrThunk && nNames) {
             pImportFile->m_nImportNames = nNames;
             pImportFile->m_pImportNames = new NOTHROW CImageImportName [nNames];
-            if (pImportFile->m_pImportNames == NULL) {
-                SetLastError(ERROR_OUTOFMEMORY);
+            if (pImportFile->m_pImportNames == nullptr) {
+                DetoursSetLastError(DETOURS_STATUS_INSUFFICIENT_RESOURCES);
                 goto fail;
             }
 
@@ -1252,8 +1225,8 @@ BOOL CImage::Read(HANDLE hFile)
                 pImportName->m_nOrig = 0;
                 pImportName->m_nOrdinal = 0;
                 pImportName->m_nHint = 0;
-                pImportName->m_pszName = NULL;
-                pImportName->m_pszOrig = NULL;
+                pImportName->m_pszName = nullptr;
+                pImportName->m_pszOrig = nullptr;
 
                 rvaName = pAddrThunk[f].u1.Ordinal;
                 if (rvaName & IMAGE_ORDINAL_FLAG) {
@@ -1266,7 +1239,7 @@ BOOL CImage::Read(HANDLE hFile)
                     if (pName) {
                         pImportName->m_nHint = pName->Hint;
                         pImportName->m_pszName = DuplicateString((PCHAR)pName->Name);
-                        if (pImportName->m_pszName == NULL) {
+                        if (pImportName->m_pszName == nullptr) {
                             goto fail;
                         }
                     }
@@ -1281,7 +1254,7 @@ BOOL CImage::Read(HANDLE hFile)
                         if (pName) {
                             pImportName->m_pszOrig
                                 = DuplicateString((PCHAR)pName->Name);
-                            if (pImportName->m_pszOrig == NULL) {
+                            if (pImportName->m_pszOrig == nullptr) {
                                 goto fail;
                             }
                         }
@@ -1302,7 +1275,7 @@ BOOL CImage::Read(HANDLE hFile)
 
         if (strcmp((PCHAR)m_SectionHeaders[n].Name, ".detour") == 0) {
             DETOUR_SECTION_HEADER dh;
-            CopyMemory(&dh,
+            memcpy(&dh,
                        m_pMap + m_SectionHeaders[n].PointerToRawData,
                        sizeof(dh));
 
@@ -1351,8 +1324,8 @@ BOOL CImage::Read(HANDLE hFile)
     }
 
     m_pImageData = new NOTHROW CImageData(pbData, cbData);
-    if (m_pImageData == NULL) {
-        SetLastError(ERROR_OUTOFMEMORY);
+    if (m_pImageData == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INSUFFICIENT_RESOURCES);
     }
     return TRUE;
 
@@ -1379,7 +1352,7 @@ BOOL CImage::CheckImportsNeeded(DWORD *pnTables, DWORD *pnThunks, DWORD *pnChars
     BOOL fNeedDetourSection = FALSE;
 
     for (CImageImportFile *pImportFile = m_pImportFiles;
-         pImportFile != NULL; pImportFile = pImportFile->m_pNextFile) {
+         pImportFile != nullptr; pImportFile = pImportFile->m_pNextFile) {
 
         nChars += (int)strlen(pImportFile->m_pszName) + 1;
         nChars += nChars & 1;
@@ -1428,23 +1401,23 @@ BOOL CImage::CheckImportsNeeded(DWORD *pnTables, DWORD *pnThunks, DWORD *pnChars
 CImageImportFile * CImage::NewByway(_In_ LPCSTR pszName)
 {
     CImageImportFile *pImportFile = new NOTHROW CImageImportFile;
-    if (pImportFile == NULL) {
-        SetLastError(ERROR_OUTOFMEMORY);
+    if (pImportFile == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INSUFFICIENT_RESOURCES);
         goto fail;
     }
 
-    pImportFile->m_pNextFile = NULL;
+    pImportFile->m_pNextFile = nullptr;
     pImportFile->m_fByway = TRUE;
 
     pImportFile->m_pszName = DuplicateString(pszName);
-    if (pImportFile->m_pszName == NULL) {
+    if (pImportFile->m_pszName == nullptr) {
         goto fail;
     }
 
     pImportFile->m_rvaOriginalFirstThunk = 0;
     pImportFile->m_rvaFirstThunk = 0;
     pImportFile->m_nForwarderChain = (UINT)0;
-    pImportFile->m_pImportNames = NULL;
+    pImportFile->m_pImportNames = nullptr;
     pImportFile->m_nImportNames = 0;
 
     m_nImportFiles++;
@@ -1453,9 +1426,9 @@ CImageImportFile * CImage::NewByway(_In_ LPCSTR pszName)
 fail:
     if (pImportFile) {
         delete pImportFile;
-        pImportFile = NULL;
+        pImportFile = nullptr;
     }
-    return NULL;
+    return nullptr;
 }
 
 BOOL CImage::EditImports(PVOID pContext,
@@ -1464,23 +1437,23 @@ BOOL CImage::EditImports(PVOID pContext,
                          PF_DETOUR_BINARY_SYMBOL_CALLBACK pfSymbolCallback,
                          PF_DETOUR_BINARY_COMMIT_CALLBACK pfCommitCallback)
 {
-    CImageImportFile *pImportFile = NULL;
+    CImageImportFile *pImportFile = nullptr;
     CImageImportFile **ppLastFile = &m_pImportFiles;
 
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    DetoursSetLastError(DETOURS_STATUS_CALL_NOT_IMPLEMENTED);
 
-    while ((pImportFile = *ppLastFile) != NULL) {
+    while ((pImportFile = *ppLastFile) != nullptr) {
 
-        if (pfBywayCallback != NULL) {
-            LPCSTR pszFile = NULL;
-            if (!(*pfBywayCallback)(pContext, NULL, &pszFile)) {
+        if (pfBywayCallback != nullptr) {
+            LPCSTR pszFile = nullptr;
+            if (!(*pfBywayCallback)(pContext, nullptr, &pszFile)) {
                 goto fail;
             }
 
-            if (pszFile != NULL) {
+            if (pszFile != nullptr) {
                 // Insert a new Byway.
                 CImageImportFile *pByway = NewByway(pszFile);
-                if (pByway == NULL) {
+                if (pByway == nullptr) {
                     return FALSE;
                 }
 
@@ -1492,28 +1465,28 @@ BOOL CImage::EditImports(PVOID pContext,
         }
 
         if (pImportFile->m_fByway) {
-            if (pfBywayCallback != NULL) {
-                LPCSTR pszFile = NULL;
+            if (pfBywayCallback != nullptr) {
+                LPCSTR pszFile = nullptr;
 
                 if (!(*pfBywayCallback)(pContext, pImportFile->m_pszName, &pszFile)) {
                     goto fail;
                 }
 
-                if (pszFile != NULL) {
+                if (pszFile != nullptr) {
                     // Replace? Byway
                     if (pszFile != pImportFile->m_pszName) {
                         LPCSTR pszLast = pImportFile->m_pszName;
                         pImportFile->m_pszName = DuplicateString(pszFile);
                         ReleaseString(pszLast);
 
-                        if (pImportFile->m_pszName == NULL) {
+                        if (pImportFile->m_pszName == nullptr) {
                             goto fail;
                         }
                     }
                 }
                 else {                                  // Delete Byway
                     *ppLastFile = pImportFile->m_pNextFile;
-                    pImportFile->m_pNextFile = NULL;
+                    pImportFile->m_pNextFile = nullptr;
                     delete pImportFile;
                     m_nImportFiles--;
                     continue;                           // Retry after delete.
@@ -1521,8 +1494,8 @@ BOOL CImage::EditImports(PVOID pContext,
             }
         }
         else {
-            if (pfFileCallback != NULL) {
-                LPCSTR pszFile = NULL;
+            if (pfFileCallback != nullptr) {
+                LPCSTR pszFile = nullptr;
 
                 if (!(*pfFileCallback)(pContext,
                                        pImportFile->m_pszOrig,
@@ -1531,24 +1504,24 @@ BOOL CImage::EditImports(PVOID pContext,
                     goto fail;
                 }
 
-                if (pszFile != NULL) {
+                if (pszFile != nullptr) {
                     if (pszFile != pImportFile->m_pszName) {
                         LPCSTR pszLast = pImportFile->m_pszName;
                         pImportFile->m_pszName = DuplicateString(pszFile);
                         ReleaseString(pszLast);
 
-                        if (pImportFile->m_pszName == NULL) {
+                        if (pImportFile->m_pszName == nullptr) {
                             goto fail;
                         }
                     }
                 }
             }
 
-            if (pfSymbolCallback != NULL) {
+            if (pfSymbolCallback != nullptr) {
                 for (DWORD n = 0; n < pImportFile->m_nImportNames; n++) {
                     CImageImportName *pImportName = &pImportFile->m_pImportNames[n];
 
-                    LPCSTR pszName = NULL;
+                    LPCSTR pszName = nullptr;
                     ULONG nOrdinal = 0;
                     if (!(*pfSymbolCallback)(pContext,
                                              pImportName->m_nOrig,
@@ -1560,7 +1533,7 @@ BOOL CImage::EditImports(PVOID pContext,
                         goto fail;
                     }
 
-                    if (pszName != NULL) {
+                    if (pszName != nullptr) {
                         if (pszName != pImportName->m_pszName) {
                             pImportName->m_nOrdinal = 0;
 
@@ -1568,7 +1541,7 @@ BOOL CImage::EditImports(PVOID pContext,
                             pImportName->m_pszName = DuplicateString(pszName);
                             ReleaseString(pszLast);
 
-                            if (pImportName->m_pszName == NULL) {
+                            if (pImportName->m_pszName == nullptr) {
                                 goto fail;
                             }
                         }
@@ -1576,9 +1549,9 @@ BOOL CImage::EditImports(PVOID pContext,
                     else if (nOrdinal != 0) {
                         pImportName->m_nOrdinal = nOrdinal;
 
-                        if (pImportName->m_pszName != NULL) {
+                        if (pImportName->m_pszName != nullptr) {
                             delete[] pImportName->m_pszName;
-                            pImportName->m_pszName = NULL;
+                            pImportName->m_pszName = nullptr;
                         }
                     }
                 }
@@ -1590,15 +1563,15 @@ BOOL CImage::EditImports(PVOID pContext,
     }
 
     for (;;) {
-        if (pfBywayCallback != NULL) {
-            LPCSTR pszFile = NULL;
-            if (!(*pfBywayCallback)(pContext, NULL, &pszFile)) {
+        if (pfBywayCallback != nullptr) {
+            LPCSTR pszFile = nullptr;
+            if (!(*pfBywayCallback)(pContext, nullptr, &pszFile)) {
                 goto fail;
             }
-            if (pszFile != NULL) {
+            if (pszFile != nullptr) {
                 // Insert a new Byway.
                 CImageImportFile *pByway = NewByway(pszFile);
-                if (pByway == NULL) {
+                if (pByway == nullptr) {
                     return FALSE;
                 }
 
@@ -1611,13 +1584,13 @@ BOOL CImage::EditImports(PVOID pContext,
         break;
     }
 
-    if (pfCommitCallback != NULL) {
+    if (pfCommitCallback != nullptr) {
         if (!(*pfCommitCallback)(pContext)) {
             goto fail;
         }
     }
 
-    SetLastError(NO_ERROR);
+    DetoursSetLastError(DETOURS_STATUS_SUCCESS);
     return TRUE;
 
   fail:
@@ -1629,7 +1602,7 @@ BOOL CImage::Write(HANDLE hFile)
     DWORD cbDone;
 
     if (hFile == INVALID_HANDLE_VALUE) {
-        SetLastError(ERROR_INVALID_HANDLE);
+        DetoursSetLastError(DETOURS_STATUS_INVALID_HANDLE);
         return FALSE;
     }
 
@@ -1643,7 +1616,7 @@ BOOL CImage::Write(HANDLE hFile)
 
     //////////////////////////////////////////////////////////// Copy Headers.
     //
-    if (SetFilePointer(hFile, 0, NULL, FILE_BEGIN) == ~0u) {
+    if (SetFilePointer(hFile, 0, nullptr, FILE_BEGIN) == ~0u) {
         return FALSE;
     }
     if (!CopyFileData(hFile, 0, m_NtHeader.OptionalHeader.SizeOfHeaders)) {
@@ -1659,7 +1632,7 @@ BOOL CImage::Write(HANDLE hFile)
             + m_NtHeader.FileHeader.SizeOfOptionalHeader;
         m_DosHeader.e_lfanew = m_nPeOffset;
 
-        if (SetFilePointer(hFile, 0, NULL, FILE_BEGIN) == ~0u) {
+        if (SetFilePointer(hFile, 0, nullptr, FILE_BEGIN) == ~0u) {
             return FALSE;
         }
         if (!WriteFile(hFile, &m_DosHeader, sizeof(m_DosHeader), &cbDone)) {
@@ -1680,7 +1653,7 @@ BOOL CImage::Write(HANDLE hFile)
             m_DosHeader.e_lfanew = m_nPeOffset;
 
 
-            if (SetFilePointer(hFile, 0, NULL, FILE_BEGIN) == ~0u) {
+            if (SetFilePointer(hFile, 0, nullptr, FILE_BEGIN) == ~0u) {
                 return FALSE;
             }
             if (!CopyFileData(hFile, m_nPrePE, m_cbPrePE)) {
@@ -1702,7 +1675,7 @@ BOOL CImage::Write(HANDLE hFile)
         if (m_SectionHeaders[n].SizeOfRawData) {
             if (SetFilePointer(hFile,
                                m_SectionHeaders[n].PointerToRawData,
-                               NULL, FILE_BEGIN) == ~0u) {
+                               nullptr, FILE_BEGIN) == ~0u) {
                 return FALSE;
             }
             if (!CopyFileData(hFile,
@@ -1736,7 +1709,7 @@ BOOL CImage::Write(HANDLE hFile)
     if (fNeedDetourSection || !m_pImageData->IsEmpty()) {
 
         if (m_NtHeader.FileHeader.NumberOfSections >= ARRAYSIZE(m_SectionHeaders)) {
-            SetLastError(ERROR_EXE_MARKED_INVALID);
+            DetoursSetLastError(DETOURS_STATUS_BAD_EXE_FORMAT);
             return FALSE;
         }
 
@@ -1745,8 +1718,8 @@ BOOL CImage::Write(HANDLE hFile)
         DWORD nSection = m_NtHeader.FileHeader.NumberOfSections++;
         DETOUR_SECTION_HEADER dh;
 
-        ZeroMemory(&dh, sizeof(dh));
-        ZeroMemory(&m_SectionHeaders[nSection], sizeof(m_SectionHeaders[nSection]));
+        RtlSecureZeroMemory(&dh, sizeof(dh));
+        RtlSecureZeroMemory(&m_SectionHeaders[nSection], sizeof(m_SectionHeaders[nSection]));
 
         dh.cbHeaderSize = sizeof(DETOUR_SECTION_HEADER);
         dh.nSignature = DETOUR_SECTION_HEADER_SIGNATURE;
@@ -1775,7 +1748,7 @@ BOOL CImage::Write(HANDLE hFile)
             .DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR].Size;
         if (clrAddr && clrSize) {
             PDETOUR_CLR_HEADER pHdr = (PDETOUR_CLR_HEADER)RvaToVa(clrAddr);
-            if (pHdr != NULL) {
+            if (pHdr != nullptr) {
                 DETOUR_CLR_HEADER hdr;
                 hdr = *pHdr;
 
@@ -1818,17 +1791,17 @@ BOOL CImage::Write(HANDLE hFile)
         }
 
         DWORD vaHead = 0;
-        PBYTE pbHead = NULL;
+        PBYTE pbHead = nullptr;
         DWORD vaPrePE = 0;
-        PBYTE pbPrePE = NULL;
+        PBYTE pbPrePE = nullptr;
         DWORD vaData = 0;
-        PBYTE pbData = NULL;
+        PBYTE pbData = nullptr;
 
-        if ((pbHead = AllocateOutput(sizeof(dh), &vaHead)) == NULL) {
+        if ((pbHead = AllocateOutput(sizeof(dh), &vaHead)) == nullptr) {
             return FALSE;
         }
 
-        if ((pbPrePE = AllocateOutput(m_cbPrePE, &vaPrePE)) == NULL) {
+        if ((pbPrePE = AllocateOutput(m_cbPrePE, &vaPrePE)) == nullptr) {
             return FALSE;
         }
 
@@ -1836,28 +1809,28 @@ BOOL CImage::Write(HANDLE hFile)
         CImageThunks boundTable(this, nThunks, &rvaBoundTable);
         CImageChars nameTable(this, nChars, &rvaNameTable);
 
-        if ((pbData = AllocateOutput(m_pImageData->m_cbData, &vaData)) == NULL) {
+        if ((pbData = AllocateOutput(m_pImageData->m_cbData, &vaData)) == nullptr) {
             return FALSE;
         }
 
         dh.nDataOffset = vaData - vaHead;
         dh.cbDataSize = dh.nDataOffset + m_pImageData->m_cbData;
-        CopyMemory(pbHead, &dh, sizeof(dh));
-        CopyMemory(pbPrePE, m_pMap + m_nPrePE, m_cbPrePE);
-        CopyMemory(pbData, m_pImageData->m_pbData, m_pImageData->m_cbData);
+        memcpy(pbHead, &dh, sizeof(dh));
+        memcpy(pbPrePE, m_pMap + m_nPrePE, m_cbPrePE);
+        memcpy(pbData, m_pImageData->m_pbData, m_pImageData->m_cbData);
 
         PIMAGE_IMPORT_DESCRIPTOR piidDst = (PIMAGE_IMPORT_DESCRIPTOR)
             AllocateOutput(nImportTableSize, &rvaImportTable);
-        if (piidDst == NULL) {
+        if (piidDst == nullptr) {
             return FALSE;
         }
 
         //////////////////////////////////////////////// Step Through Imports.
         //
         for (CImageImportFile *pImportFile = m_pImportFiles;
-             pImportFile != NULL; pImportFile = pImportFile->m_pNextFile) {
+             pImportFile != nullptr; pImportFile = pImportFile->m_pNextFile) {
 
-            ZeroMemory(piidDst, sizeof(piidDst));
+            RtlSecureZeroMemory(piidDst, sizeof(piidDst));
             nameTable.Allocate(pImportFile->m_pszName, (DWORD *)&piidDst->Name);
             piidDst->TimeDateStamp = 0;
             piidDst->ForwarderChain = pImportFile->m_nForwarderChain;
@@ -1899,7 +1872,7 @@ BOOL CImage::Write(HANDLE hFile)
             }
             piidDst++;
         }
-        ZeroMemory(piidDst, sizeof(piidDst));
+        RtlSecureZeroMemory(piidDst, sizeof(piidDst));
 
         //////////////////////////////////////////////////////////////////////////
         //
@@ -1932,7 +1905,7 @@ BOOL CImage::Write(HANDLE hFile)
         //////////////////////////////////////////////////////////////////////////
         //
         if (SetFilePointer(hFile, m_SectionHeaders[nSection].PointerToRawData,
-                           NULL, FILE_BEGIN) == ~0u) {
+                           nullptr, FILE_BEGIN) == ~0u) {
             return FALSE;
         }
         if (!WriteFile(hFile, m_pbOutputBuffer, m_SectionHeaders[nSection].SizeOfRawData,
@@ -1970,12 +1943,12 @@ BOOL CImage::Write(HANDLE hFile)
         .DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG].Size;
     if (debugAddr && debugSize) {
         DWORD nFileOffset = RvaToFileOffset(debugAddr);
-        if (SetFilePointer(hFile, nFileOffset, NULL, FILE_BEGIN) == ~0u) {
+        if (SetFilePointer(hFile, nFileOffset, nullptr, FILE_BEGIN) == ~0u) {
             return FALSE;
         }
 
         PIMAGE_DEBUG_DIRECTORY pDir = (PIMAGE_DEBUG_DIRECTORY)RvaToVa(debugAddr);
-        if (pDir == NULL) {
+        if (pDir == nullptr) {
             return FALSE;
         }
 
@@ -2000,12 +1973,12 @@ BOOL CImage::Write(HANDLE hFile)
         .DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR].Size;
     if (clrAddr && clrSize && fNeedDetourSection) {
         DWORD nFileOffset = RvaToFileOffset(clrAddr);
-        if (SetFilePointer(hFile, nFileOffset, NULL, FILE_BEGIN) == ~0u) {
+        if (SetFilePointer(hFile, nFileOffset, nullptr, FILE_BEGIN) == ~0u) {
             return FALSE;
         }
 
         PDETOUR_CLR_HEADER pHdr = (PDETOUR_CLR_HEADER)RvaToVa(clrAddr);
-        if (pHdr == NULL) {
+        if (pHdr == nullptr) {
             return FALSE;
         }
 
@@ -2021,7 +1994,7 @@ BOOL CImage::Write(HANDLE hFile)
     ///////////////////////////////////////////////// Copy Left-over Data.
     //
     if (m_nFileSize > m_nExtraOffset) {
-        if (SetFilePointer(hFile, m_nNextFileAddr, NULL, FILE_BEGIN) == ~0u) {
+        if (SetFilePointer(hFile, m_nNextFileAddr, nullptr, FILE_BEGIN) == ~0u) {
             return FALSE;
         }
         if (!CopyFileData(hFile, m_nExtraOffset, m_nFileSize - m_nExtraOffset)) {
@@ -2033,14 +2006,14 @@ BOOL CImage::Write(HANDLE hFile)
     //////////////////////////////////////////////////// Finalize Headers.
     //
 
-    if (SetFilePointer(hFile, m_nPeOffset, NULL, FILE_BEGIN) == ~0u) {
+    if (SetFilePointer(hFile, m_nPeOffset, nullptr, FILE_BEGIN) == ~0u) {
         return FALSE;
     }
     if (!WriteFile(hFile, &m_NtHeader, sizeof(m_NtHeader), &cbDone)) {
         return FALSE;
     }
 
-    if (SetFilePointer(hFile, m_nSectionsOffset, NULL, FILE_BEGIN) == ~0u) {
+    if (SetFilePointer(hFile, m_nSectionsOffset, nullptr, FILE_BEGIN) == ~0u) {
         return FALSE;
     }
     if (!WriteFile(hFile, &m_SectionHeaders,
@@ -2050,7 +2023,7 @@ BOOL CImage::Write(HANDLE hFile)
         return FALSE;
     }
 
-    m_cbPostPE = SetFilePointer(hFile, 0, NULL, FILE_CURRENT);
+    m_cbPostPE = SetFilePointer(hFile, 0, nullptr, FILE_CURRENT);
     if (m_cbPostPE == ~0u) {
         return FALSE;
     }
@@ -2063,12 +2036,12 @@ BOOL CImage::Write(HANDLE hFile)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-PDETOUR_BINARY WINAPI DetourBinaryOpen(_In_ HANDLE hFile)
+PDETOUR_BINARY DETOURS_API DetourBinaryOpen(_In_ HANDLE hFile)
 {
     Detour::CImage *pImage = new NOTHROW
         Detour::CImage;
-    if (pImage == NULL) {
-        SetLastError(ERROR_OUTOFMEMORY);
+    if (pImage == nullptr) {
+        DetoursSetLastError(DETOURS_STATUS_INSUFFICIENT_RESOURCES);
         return FALSE;
     }
 
@@ -2080,11 +2053,11 @@ PDETOUR_BINARY WINAPI DetourBinaryOpen(_In_ HANDLE hFile)
     return (PDETOUR_BINARY)pImage;
 }
 
-BOOL WINAPI DetourBinaryWrite(_In_ PDETOUR_BINARY pdi,
+BOOL DETOURS_API DetourBinaryWrite(_In_ PDETOUR_BINARY pdi,
                               _In_ HANDLE hFile)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pdi);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
@@ -2093,14 +2066,14 @@ BOOL WINAPI DetourBinaryWrite(_In_ PDETOUR_BINARY pdi,
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourBinaryEnumeratePayloads(_In_ PDETOUR_BINARY pBinary,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourBinaryEnumeratePayloads(_In_ PDETOUR_BINARY pBinary,
                                            _Out_opt_ GUID *pGuid,
                                            _Out_ DWORD *pcbData,
                                            _Inout_ DWORD *pnIterator)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
@@ -2109,47 +2082,47 @@ PVOID WINAPI DetourBinaryEnumeratePayloads(_In_ PDETOUR_BINARY pBinary,
 
 _Writable_bytes_(*pcbData)
 _Readable_bytes_(*pcbData)
-_Success_(return != NULL)
-PVOID WINAPI DetourBinaryFindPayload(_In_ PDETOUR_BINARY pBinary,
+_Success_(return != nullptr)
+PVOID DETOURS_API DetourBinaryFindPayload(_In_ PDETOUR_BINARY pBinary,
                                      _In_ REFGUID rguid,
                                      _Out_ DWORD *pcbData)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
     return pImage->DataFind(rguid, pcbData);
 }
 
-PVOID WINAPI DetourBinarySetPayload(_In_ PDETOUR_BINARY pBinary,
+PVOID DETOURS_API DetourBinarySetPayload(_In_ PDETOUR_BINARY pBinary,
                                     _In_ REFGUID rguid,
                                     _In_reads_opt_(cbData) PVOID pvData,
                                     _In_ DWORD cbData)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
-        return NULL;
+    if (pImage == nullptr) {
+        return nullptr;
     }
 
     return pImage->DataSet(rguid, (PBYTE)pvData, cbData);
 }
 
-BOOL WINAPI DetourBinaryDeletePayload(_In_ PDETOUR_BINARY pBinary,
+BOOL DETOURS_API DetourBinaryDeletePayload(_In_ PDETOUR_BINARY pBinary,
                                       _In_ REFGUID rguid)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
     return pImage->DataDelete(rguid);
 }
 
-BOOL WINAPI DetourBinaryPurgePayloads(_In_ PDETOUR_BINARY pBinary)
+BOOL DETOURS_API DetourBinaryPurgePayloads(_In_ PDETOUR_BINARY pBinary)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
@@ -2158,18 +2131,18 @@ BOOL WINAPI DetourBinaryPurgePayloads(_In_ PDETOUR_BINARY pBinary)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-static BOOL CALLBACK ResetBywayCallback(_In_opt_ PVOID pContext,
+static BOOL DETOURS_CALLBACK ResetBywayCallback(_In_opt_ PVOID pContext,
                                         _In_opt_ LPCSTR pszFile,
                                         _Outptr_result_maybenull_ LPCSTR *ppszOutFile)
 {
     UNREFERENCED_PARAMETER(pContext);
     UNREFERENCED_PARAMETER(pszFile);
 
-    *ppszOutFile = NULL;
+    *ppszOutFile = nullptr;
     return TRUE;
 }
 
-static BOOL CALLBACK ResetFileCallback(_In_opt_ PVOID pContext,
+static BOOL DETOURS_CALLBACK ResetFileCallback(_In_opt_ PVOID pContext,
                                        _In_ LPCSTR pszOrigFile,
                                        _In_ LPCSTR pszFile,
                                        _Outptr_result_maybenull_ LPCSTR *ppszOutFile)
@@ -2181,7 +2154,7 @@ static BOOL CALLBACK ResetFileCallback(_In_opt_ PVOID pContext,
     return TRUE;
 }
 
-static BOOL CALLBACK ResetSymbolCallback(_In_opt_ PVOID pContext,
+static BOOL DETOURS_CALLBACK ResetSymbolCallback(_In_opt_ PVOID pContext,
                                          _In_ ULONG nOrigOrdinal,
                                          _In_ ULONG nOrdinal,
                                          _Out_ ULONG *pnOutOrdinal,
@@ -2198,23 +2171,23 @@ static BOOL CALLBACK ResetSymbolCallback(_In_opt_ PVOID pContext,
     return TRUE;
 }
 
-BOOL WINAPI DetourBinaryResetImports(_In_ PDETOUR_BINARY pBinary)
+BOOL DETOURS_API DetourBinaryResetImports(_In_ PDETOUR_BINARY pBinary)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
-    return pImage->EditImports(NULL,
+    return pImage->EditImports(nullptr,
                                ResetBywayCallback,
                                ResetFileCallback,
                                ResetSymbolCallback,
-                               NULL);
+                               nullptr);
 }
 
 //////////////////////////////////////////////////////////////////////////////
 //
-BOOL WINAPI DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
+BOOL DETOURS_API DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
                                     _In_opt_ PVOID pContext,
                                     _In_opt_ PF_DETOUR_BINARY_BYWAY_CALLBACK pfByway,
                                     _In_opt_ PF_DETOUR_BINARY_FILE_CALLBACK pfFile,
@@ -2222,7 +2195,7 @@ BOOL WINAPI DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
                                     _In_opt_ PF_DETOUR_BINARY_COMMIT_CALLBACK pfCommit)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
@@ -2233,19 +2206,21 @@ BOOL WINAPI DetourBinaryEditImports(_In_ PDETOUR_BINARY pBinary,
                                pfCommit);
 }
 
-BOOL WINAPI DetourBinaryClose(_In_ PDETOUR_BINARY pBinary)
+BOOL DETOURS_API DetourBinaryClose(_In_ PDETOUR_BINARY pBinary)
 {
     Detour::CImage *pImage = Detour::CImage::IsValid(pBinary);
-    if (pImage == NULL) {
+    if (pImage == nullptr) {
         return FALSE;
     }
 
     BOOL bSuccess = pImage->Close();
     delete pImage;
-    pImage = NULL;
+    pImage = nullptr;
 
     return bSuccess;
 }
+
+#endif // DetoursUserMode
 
 //
 ///////////////////////////////////////////////////////////////// End of File.

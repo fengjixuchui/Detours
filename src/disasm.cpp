@@ -7,27 +7,8 @@
 //  Copyright (c) Microsoft Corporation.  All rights reserved.
 //
 
-#if _MSC_VER >= 1900
-#pragma warning(push)
-#pragma warning(disable:4091) // empty typedef
-#endif
+#include "internal.h"
 
-#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
-#include <windows.h>
-#include <limits.h>
-
-// #define DETOUR_DEBUG 1
-#define DETOURS_INTERNAL
-
-#include "detours.h"
-
-#if DETOURS_VERSION != 0x4c0c1   // 0xMAJORcMINORcPATCH
-#error detours.h version mismatch
-#endif
-
-#if _MSC_VER >= 1900
-#pragma warning(pop)
-#endif
 
 #undef ASSERT
 #define ASSERT(x)
@@ -110,15 +91,15 @@
 //
 //  Arguments:
 //      pDst:
-//          Destination address for the instruction.  May be NULL in which
+//          Destination address for the instruction.  May be nullptr in which
 //          case DetourCopyInstruction is used to measure an instruction.
-//          If not NULL then the source instruction is copied to the
+//          If not nullptr then the source instruction is copied to the
 //          destination instruction and any relative arguments are adjusted.
 //      ppDstPool:
 //          Destination address for the end of the constant pool.  The
 //          constant pool works backwards toward pDst.  All memory between
 //          pDst and *ppDstPool must be available for use by this function.
-//          ppDstPool may be NULL if pDst is NULL.
+//          ppDstPool may be nullptr if pDst is nullptr.
 //      pSrc:
 //          Source address of the instruction.
 //      ppTarget:
@@ -126,7 +107,7 @@
 //          the instruction.  For example, a branch or a jump insruction has
 //          a target, but a load or store instruction doesn't.  A target is
 //          another instruction that may be executed as a result of this
-//          instruction.  ppTarget may be NULL.
+//          instruction.  ppTarget may be nullptr.
 //      plExtra:
 //          Out parameter for the number of extra bytes needed by the
 //          instruction to reach the target.  For example, lExtra = 3 if the
@@ -261,7 +242,7 @@ class CDetourDis
 #define ENTRY_CopyVex2              ENTRY_DataIgnored &CDetourDis::CopyVex2
 #define ENTRY_CopyVex3              ENTRY_DataIgnored &CDetourDis::CopyVex3
 #define ENTRY_Invalid               ENTRY_DataIgnored &CDetourDis::Invalid
-#define ENTRY_End                   ENTRY_DataIgnored NULL
+#define ENTRY_End                   ENTRY_DataIgnored nullptr
 
     PBYTE CopyBytes(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc);
     PBYTE CopyBytesPrefix(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc);
@@ -299,23 +280,23 @@ class CDetourDis
     static BOOL             s_fLimitReferencesToModule;
 
   protected:
-    BOOL                m_bOperandOverride;
-    BOOL                m_bAddressOverride;
-    BOOL                m_bRaxOverride; // AMD64 only
-    BOOL                m_bVex;
-    BOOL                m_bF2;
-    BOOL                m_bF3; // x86 only
-    BYTE                m_nSegmentOverride;
+    BOOL                m_bOperandOverride  = FALSE;
+    BOOL                m_bAddressOverride  = FALSE;
+    BOOL                m_bRaxOverride      = FALSE; // AMD64 only
+    BOOL                m_bVex              = FALSE;
+    BOOL                m_bF2               = FALSE;
+    BOOL                m_bF3               = FALSE; // x86 only
+    BYTE                m_nSegmentOverride  = 0;
 
-    PBYTE *             m_ppbTarget;
-    LONG *              m_plExtra;
+    PBYTE *             m_ppbTarget         = nullptr;
+    LONG *              m_plExtra           = nullptr;
 
-    LONG                m_lScratchExtra;
-    PBYTE               m_pbScratchTarget;
-    BYTE                m_rbScratchDst[64]; // matches or exceeds rbCode
+    LONG                m_lScratchExtra     = 0;
+    PBYTE               m_pbScratchTarget   = nullptr;
+    BYTE                m_rbScratchDst[64]  = { 0 }; // matches or exceeds rbCode
 };
 
-PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
+PVOID DETOURS_API DetourCopyInstruction(_In_opt_ PVOID pDst,
                                    _Inout_opt_ PVOID *ppDstPool,
                                    _In_ PVOID pSrc,
                                    _Out_opt_ PVOID *ppTarget,
@@ -348,13 +329,13 @@ CDetourDis::CDetourDis(_Out_opt_ PBYTE *ppbTarget, _Out_opt_ LONG *plExtra)
 PBYTE CDetourDis::CopyInstruction(PBYTE pbDst, PBYTE pbSrc)
 {
     // Configure scratch areas if real areas are not available.
-    if (NULL == pbDst) {
+    if (nullptr == pbDst) {
         pbDst = m_rbScratchDst;
     }
-    if (NULL == pbSrc) {
+    if (nullptr == pbSrc) {
         // We can't copy a non-existent instruction.
-        SetLastError(ERROR_INVALID_DATA);
-        return NULL;
+        DetoursSetLastError(DETOURS_STATUS_INVALID_ADDRESS);
+        return nullptr;
     }
 
     // Figure out how big the instruction is, do the appropriate copy,
@@ -422,14 +403,14 @@ PBYTE CDetourDis::CopyBytes(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc)
         }
 #endif
     }
-    CopyMemory(pbDst, pbSrc, nBytes);
+    memcpy(pbDst, pbSrc, nBytes);
 
     if (nRelOffset) {
         *m_ppbTarget = AdjustTarget(pbDst, pbSrc, nBytes, nRelOffset, cbTarget);
 #ifdef DETOURS_X64
         if (pEntry->nRelOffset == 0) {
             // This is a data target, not a code target, so we shouldn't return it.
-            *m_ppbTarget = NULL;
+            *m_ppbTarget = nullptr;
         }
 #endif
     }
@@ -452,7 +433,7 @@ PBYTE CDetourDis::CopyBytesPrefix(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc)
 PBYTE CDetourDis::CopyBytesSegment(REFCOPYENTRY, PBYTE pbDst, PBYTE pbSrc)
 {
     m_nSegmentOverride = pbSrc[0];
-    return CopyBytesPrefix(0, pbDst, pbSrc);
+    return CopyBytesPrefix(nullptr, pbDst, pbSrc);
 }
 
 PBYTE CDetourDis::CopyBytesRax(REFCOPYENTRY, PBYTE pbDst, PBYTE pbSrc)
@@ -460,7 +441,7 @@ PBYTE CDetourDis::CopyBytesRax(REFCOPYENTRY, PBYTE pbDst, PBYTE pbSrc)
     if (pbSrc[0] & 0x8) {
         m_bRaxOverride = TRUE;
     }
-    return CopyBytesPrefix(0, pbDst, pbSrc);
+    return CopyBytesPrefix(nullptr, pbDst, pbSrc);
 }
 
 PBYTE CDetourDis::CopyBytesJump(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc)
@@ -468,7 +449,7 @@ PBYTE CDetourDis::CopyBytesJump(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc)
     (void)pEntry;
 
     PVOID pvSrcAddr = &pbSrc[1];
-    PVOID pvDstAddr = NULL;
+    PVOID pvDstAddr = nullptr;
     LONG_PTR nOldOffset = (LONG_PTR)*(signed char*&)pvSrcAddr;
     LONG_PTR nNewOffset = 0;
 
@@ -499,7 +480,7 @@ PBYTE CDetourDis::CopyBytesJump(REFCOPYENTRY pEntry, PBYTE pbDst, PBYTE pbSrc)
 PBYTE CDetourDis::AdjustTarget(PBYTE pbDst, PBYTE pbSrc, UINT cbOp,
                                UINT cbTargetOffset, UINT cbTargetSize)
 {
-    PBYTE pbTarget = NULL;
+    PBYTE pbTarget = nullptr;
 #if 1 // fault injection to test test code
 #if defined(DETOURS_X64)
     typedef LONGLONG T;
@@ -837,7 +818,7 @@ PBYTE CDetourDis::CopyVex2(REFCOPYENTRY, PBYTE pbDst, PBYTE pbSrc)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-PBYTE CDetourDis::s_pbModuleBeg = NULL;
+PBYTE CDetourDis::s_pbModuleBeg = nullptr;
 PBYTE CDetourDis::s_pbModuleEnd = (PBYTE)~(ULONG_PTR)0;
 BOOL CDetourDis::s_fLimitReferencesToModule = FALSE;
 
@@ -1529,7 +1510,7 @@ BOOL CDetourDis::SanityCheckSystem()
             return FALSE;
         }
     }
-    if (s_rceCopyTable[256].pfCopy != NULL) {
+    if (s_rceCopyTable[256].pfCopy != nullptr) {
         ASSERT(!"Missing end marker.");
         return FALSE;
     }
@@ -1542,7 +1523,7 @@ BOOL CDetourDis::SanityCheckSystem()
             return FALSE;
         }
     }
-    if (s_rceCopyTable0F[256].pfCopy != NULL) {
+    if (s_rceCopyTable0F[256].pfCopy != nullptr) {
         ASSERT(!"Missing end marker.");
         return FALSE;
     }
@@ -1633,7 +1614,7 @@ BYTE DETOUR_IA64_BUNDLE::GetUnit(BYTE slot) const
     case 1: return GetUnit1();
     case 2: return GetUnit2();
     }
-    __debugbreak();
+    DETOUR_BREAK();
     return 0;
 }
 
@@ -1676,7 +1657,7 @@ VOID DETOUR_IA64_BUNDLE::SetInst(BYTE slot, BYTE nInst)
     case 1: SetInst1(nInst); return;
     case 2: SetInst2(nInst); return;
     }
-    __debugbreak();
+    DETOUR_BREAK();
 }
 
 VOID DETOUR_IA64_BUNDLE::SetInst0(BYTE nInst)
@@ -1702,7 +1683,7 @@ VOID DETOUR_IA64_BUNDLE::SetData(BYTE slot, UINT64 nData)
     case 1: SetData1(nData); return;
     case 2: SetData2(nData); return;
     }
-    __debugbreak();
+    DETOUR_BREAK();
 }
 
 VOID DETOUR_IA64_BUNDLE::SetData0(UINT64 nData)
@@ -1728,7 +1709,7 @@ UINT64 DETOUR_IA64_BUNDLE::GetInstruction(BYTE slot) const
     case 1: return GetInstruction1();
     case 2: return GetInstruction2();
     }
-    __debugbreak();
+    DETOUR_BREAK();
     return 0;
 }
 
@@ -1759,7 +1740,7 @@ void DETOUR_IA64_BUNDLE::SetInstruction(BYTE slot, UINT64 instruction)
     case 1: SetInstruction1(instruction); return;
     case 2: SetInstruction2(instruction); return;
     }
-    __debugbreak();
+    DETOUR_BREAK();
 }
 
 void DETOUR_IA64_BUNDLE::SetInstruction0(UINT64 instruction)
@@ -1988,7 +1969,7 @@ imm20b:
     goto set_brl;
 
 set_brl:
-    if (pBundleExtra != NULL) {
+    if (pBundleExtra != nullptr) {
         pDst->SetInstruction(slot, new_instruction);
         pBundleExtra->SetBrl((size_t)this + imm);
     }
@@ -2168,7 +2149,7 @@ BOOL DETOUR_IA64_BUNDLE::SetNop(BYTE slot)
         SetData(slot, 0);
         return true;
     }
-    DebugBreak();
+    DETOUR_BREAK();
     return false;
 }
 
@@ -2194,7 +2175,7 @@ VOID DETOUR_IA64_BUNDLE::SetStop()
 
 #endif // DETOURS_IA64
 
-PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
+PVOID DETOURS_API DetourCopyInstruction(_In_opt_ PVOID pDst,
                                    _Inout_opt_ PVOID *ppDstPool,
                                    _In_ PVOID pSrc,
                                    _Out_opt_ PVOID *ppTarget,
@@ -2208,7 +2189,7 @@ PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
     plExtra = plExtra ? plExtra : &nExtra;
     *plExtra = 0;
 
-    if (ppTarget != NULL) {
+    if (ppTarget != nullptr) {
         if (pbSrc->IsBrl()) {
             *ppTarget = (PVOID)pbSrc->GetBrlTarget();
         }
@@ -2216,7 +2197,7 @@ PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
             *ppTarget = DETOUR_INSTRUCTION_TARGET_NONE;
         }
     }
-    *plExtra = (LONG)pbSrc->Copy(pbDst, ppDstPool ? ((DETOUR_IA64_BUNDLE*)*ppDstPool) - 1 : (DETOUR_IA64_BUNDLE*)NULL);
+    *plExtra = (LONG)pbSrc->Copy(pbDst, ppDstPool ? ((DETOUR_IA64_BUNDLE*)*ppDstPool) - 1 : (DETOUR_IA64_BUNDLE*)nullptr);
     return pbSrc + 1;
 }
 
@@ -2534,11 +2515,11 @@ class CDetourDis
     }
 
   protected:
-    PBYTE   m_pbTarget;
-    PBYTE   m_pbPool;
-    LONG    m_lExtra;
+    PBYTE   m_pbTarget  = nullptr;
+    PBYTE   m_pbPool    = nullptr;
+    LONG    m_lExtra    = 0;
 
-    BYTE    m_rbScratchDst[64]; // matches or exceeds rbCode
+    BYTE    m_rbScratchDst[64] = { 0 }; // matches or exceeds rbCode
 
     static const COPYENTRY s_rceCopyTable[33];
 };
@@ -2548,7 +2529,7 @@ LONG CDetourDis::DecodeBranch5(ULONG opcode)
     Branch5& branch = (Branch5&)(opcode);
 
     Branch5Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm5 = branch.Imm5;
     target.I = branch.I;
 
@@ -2577,7 +2558,7 @@ LONG CDetourDis::DecodeBranch8(ULONG opcode)
     Branch8& branch = (Branch8&)(opcode);
 
     Branch8Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm8 = branch.Imm8;
 
     // Return sign extended value
@@ -2604,7 +2585,7 @@ LONG CDetourDis::DecodeBranch11(ULONG opcode)
     Branch11& branch = (Branch11&)(opcode);
 
     Branch11Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm11 = branch.Imm11;
 
     // Return sign extended value
@@ -2640,7 +2621,7 @@ LONG CDetourDis::DecodeBranch20(ULONG opcode)
     Branch20& branch = (Branch20&)(opcode);
 
     Branch20Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm11 = branch.Imm11;
     target.Imm6 = branch.Imm6;
     target.Sign = branch.Sign;
@@ -2679,7 +2660,7 @@ LONG CDetourDis::DecodeBranch24(ULONG opcode, BOOL& fLink)
     Branch24& branch = (Branch24&)(opcode);
 
     Branch24Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm11 = branch.Imm11;
     target.Imm10 = branch.Imm10;
     target.Sign = branch.Sign;
@@ -2720,7 +2701,7 @@ LONG CDetourDis::DecodeLiteralLoad8(ULONG instruction)
     LiteralLoad8& load = (LiteralLoad8&)(instruction);
 
     LiteralLoad8Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm8 = load.Imm8;
 
     return (LONG&)target;
@@ -2744,7 +2725,7 @@ LONG CDetourDis::DecodeLiteralLoad12(ULONG instruction)
     LiteralLoad12& load = (LiteralLoad12&)(instruction);
 
     LiteralLoad12Target target;
-    ZeroMemory(&target, sizeof(target));
+    RtlSecureZeroMemory(&target, sizeof(target));
     target.Imm12 = load.Imm12;
 
     return (LONG&)target;
@@ -3097,7 +3078,7 @@ const CDetourDis::COPYENTRY CDetourDis::s_rceCopyTable[33] =
     /* 0b11101 */ { 0x1d, &CDetourDis::BeginCopy32 },
     /* 0b11110 */ { 0x1e, &CDetourDis::BeginCopy32 },
     /* 0b11111 */ { 0x1f, &CDetourDis::BeginCopy32 },
-    { 0, NULL }
+    { 0, nullptr }
 };
 
 BYTE CDetourDis::CopyBranch24(BYTE* pSource, BYTE* pDest)
@@ -3300,7 +3281,7 @@ BYTE CDetourDis::CopyTableBranch(BYTE* pSource, BYTE* pDest)
         return PureCopy32(pSource, pDest);
     }
 
-    __debugbreak();
+    DETOUR_BREAK();
 
     // If the base register is PC, we need to manually perform the table lookup
     // For example, this:
@@ -3478,9 +3459,11 @@ BYTE CDetourDis::BeginCopy32(BYTE* pSource, BYTE* pDest)
 //
 CDetourDis::CDetourDis()
 {
-    m_pbTarget = (PBYTE)DETOUR_INSTRUCTION_TARGET_NONE;
-    m_pbPool = NULL;
-    m_lExtra = 0;
+    m_pbTarget  = (PBYTE)DETOUR_INSTRUCTION_TARGET_NONE;
+    m_pbPool    = nullptr;
+    m_lExtra    = 0;
+
+    m_rbScratchDst;
 }
 
 PBYTE CDetourDis::CopyInstruction(PBYTE pDst,
@@ -3489,7 +3472,7 @@ PBYTE CDetourDis::CopyInstruction(PBYTE pDst,
                                   PBYTE *ppTarget,
                                   LONG *plExtra)
 {
-    if (pDst && ppDstPool && ppDstPool != NULL) {
+    if (pDst && ppDstPool && ppDstPool != nullptr) {
         m_pbPool = (PBYTE)*ppDstPool;
     }
     else {
@@ -3519,7 +3502,7 @@ PBYTE CDetourDis::CopyInstruction(PBYTE pDst,
 }
 
 
-PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
+PVOID DETOURS_API DetourCopyInstruction(_In_opt_ PVOID pDst,
                                    _Inout_opt_ PVOID *ppDstPool,
                                    _In_ PVOID pSrc,
                                    _Out_opt_ PVOID *ppTarget,
@@ -3869,8 +3852,8 @@ class CDetourDis
     }
 
   protected:
-    PBYTE   m_pbTarget;
-    BYTE    m_rbScratchDst[128]; // matches or exceeds rbCode
+    PBYTE   m_pbTarget  = nullptr;
+    BYTE    m_rbScratchDst[128] = { 0 }; // matches or exceeds rbCode
 };
 
 BYTE CDetourDis::PureCopy32(BYTE* pSource, BYTE* pDest)
@@ -3884,6 +3867,8 @@ BYTE CDetourDis::PureCopy32(BYTE* pSource, BYTE* pDest)
 CDetourDis::CDetourDis()
 {
     m_pbTarget = (PBYTE)DETOUR_INSTRUCTION_TARGET_NONE;
+
+    m_rbScratchDst;
 }
 
 PBYTE CDetourDis::CopyInstruction(PBYTE pDst,
@@ -3891,7 +3876,7 @@ PBYTE CDetourDis::CopyInstruction(PBYTE pDst,
                                   PBYTE *ppTarget,
                                   LONG *plExtra)
 {
-    if (pDst == NULL) {
+    if (pDst == nullptr) {
         pDst = m_rbScratchDst;
     }
 
@@ -4205,7 +4190,7 @@ BYTE CDetourDis::CopyLdrLiteral(BYTE* pSource, BYTE* pDest, ULONG instruction)
 }
 
 
-PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
+PVOID DETOURS_API DetourCopyInstruction(_In_opt_ PVOID pDst,
                                    _Inout_opt_ PVOID *ppDstPool,
                                    _In_ PVOID pSrc,
                                    _Out_opt_ PVOID *ppTarget,
@@ -4222,14 +4207,15 @@ PVOID WINAPI DetourCopyInstruction(_In_opt_ PVOID pDst,
 
 #endif // DETOURS_ARM64
 
-BOOL WINAPI DetourSetCodeModule(_In_ HMODULE hModule,
+#ifdef DetoursUserMode
+BOOL DETOURS_API DetourSetCodeModule(_In_ HMODULE hModule,
                                 _In_ BOOL fLimitReferencesToModule)
 {
 #if defined(DETOURS_X64) || defined(DETOURS_X86)
-    PBYTE pbBeg = NULL;
+    PBYTE pbBeg = nullptr;
     PBYTE pbEnd = (PBYTE)~(ULONG_PTR)0;
 
-    if (hModule != NULL) {
+    if (hModule != nullptr) {
         ULONG cbModule = DetourGetModuleSize(hModule);
 
         pbBeg = (PBYTE)hModule;
@@ -4245,6 +4231,8 @@ BOOL WINAPI DetourSetCodeModule(_In_ HMODULE hModule,
 #error unknown architecture (x86, x64, arm, arm64, ia64)
 #endif
 }
+#endif
 
 //
 ///////////////////////////////////////////////////////////////// End of File.
+

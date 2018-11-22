@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="inc">
+      <UniqueIdentifier>{07102247-2100-4b9d-8517-94ede39025f9}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{a1b5a80c-91dc-4a40-b799-20ad03d015a0}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="creatwth.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="detours.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disasm.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disolarm.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disolarm64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disolia64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disolx64.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="disolx86.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="image.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="modules.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="internal.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Inc\detours.h">
+      <Filter>inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\detver.h">
+      <Filter>inc</Filter>
+    </ClInclude>
+    <ClInclude Include="internal.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="native.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
