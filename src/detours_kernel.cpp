@@ -358,28 +358,41 @@ C_ASSERT(sizeof(_DETOUR_TRAMPOLINE) == 96);
 
 enum
 {
-    SIZE_OF_JMP             = 16,
+    SIZE_OF_JMP             = 12,
     SIZE_OF_JMP_TO_REMAIN   = 6
 };
 
 inline PBYTE detour_gen_jmp_far(PBYTE pbCode, PBYTE pbJmpVal)
 {
-    const BYTE Jumper[] = 
-    { 
-        // 50                             push   rax
+    //const BYTE Jumper[] = 
+    //{ 
+    //    // 50                             push   rax
+    //    // 48 b8 00 00 00 00 00 00 00 00  mov rax, 0x0
+    //    // 48 87 04 24                    xchg   QWORD PTR[rsp], rax
+    //    // c3                             ret
+    //
+    //    0x50,   //  vvvvvvvvvvvvvvvvv address vvvvvvvvvvvvvvvvvvvv
+    //    0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    //    0x48, 0x87, 0x04, 0x24,
+    //    0xc3
+    //};
+    //C_ASSERT(sizeof(Jumper) == SIZE_OF_JMP);
+
+    const BYTE Jumper[] =
+    {
         // 48 b8 00 00 00 00 00 00 00 00  mov rax, 0x0
-        // 48 87 04 24                    xchg   QWORD PTR[rsp], rax
+        // 50                             push   rax
         // c3                             ret
 
-        0x50,   //  vvvvvvvvvvvvvvvvv address vvvvvvvvvvvvvvvvvvvv
+        //          vvvvvvvvvvvvvvvvv address vvvvvvvvvvvvvvvvvvvv
         0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x48, 0x87, 0x04, 0x24,
+        0x50,
         0xc3
     };
     C_ASSERT(sizeof(Jumper) == SIZE_OF_JMP);
-
+    
     memcpy(pbCode, Jumper, sizeof(Jumper));
-    memcpy(pbCode + 3,  &pbJmpVal, sizeof(&pbJmpVal));
+    memcpy(pbCode + 2,  &pbJmpVal, sizeof(&pbJmpVal));
 
     pbCode += sizeof(Jumper);
     return pbCode;
@@ -2166,7 +2179,7 @@ LONG DETOURS_API DetourAttachEx(_Inout_ PVOID *ppPointer,
     {
         // Too few instructions.
 
-        error = DETOURS_STATUS_INVALID_BLOCK;
+        error = DETOURS_STATUS_OUTOFMEMORY;
         if (s_fIgnoreTooSmall)
         {
             goto stop;
